@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "catalog/column_list.h"
 #include "catalog/oid_manager.h"
 #include "common/constants.h"
+#include "index/index.h"
 
 namespace huadb {
 
@@ -16,7 +18,7 @@ class Index;
 
 class SystemCatalog {
  public:
-  SystemCatalog(BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid = PRESERVED_OID);
+  SystemCatalog(Disk &disk, BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid = PRESERVED_OID);
 
   // 创建系统表，仅初始化系统使用
   void CreateSystemTables();
@@ -40,14 +42,20 @@ class SystemCatalog {
                    oid_t db_oid = INVALID_OID, bool new_table = true);
   // 删除表
   void DropTable(const std::string &table_name);
-  // 创建索引
-  void CreateIndex(const std::string &index_name, const std::string &table_name);
+  // 创建新的索引
+  void CreateIndex(const std::string &index_name, const std::string &table_name,
+                   const std::vector<std::string> &column_names, IndexType index_type);
+  // 从持久化存储中加载索引
+  void CreateIndex(oid_t oid, oid_t table_oid, const std::string &index_name, IndexType index_type,
+                   std::string &column_indices);
   // 删除索引
   void DropIndex(const std::string &index_name);
   // 获取当前数据库下所有表名
   std::vector<std::string> GetTableNames() const;
   // 获取表
   std::shared_ptr<Table> GetTable(oid_t oid) const;
+  // 获取索引
+  std::set<std::shared_ptr<Index>> GetTableIndex(oid_t table_oid) const;
   // 获取表oid
   oid_t GetTableOid(const std::string &table_name) const;
   // 获取表的schema信息
@@ -78,7 +86,9 @@ class SystemCatalog {
   void LoadDatabaseMeta();
   void LoadTableMeta();
   void LoadStatistics();
+  void LoadIndexMeta();
 
+  Disk &disk_;
   BufferPool &buffer_pool_;
   LogManager &log_manager_;
 
@@ -87,6 +97,7 @@ class SystemCatalog {
   std::unordered_map<std::string, oid_t> name2oid_;
   std::unordered_map<oid_t, std::shared_ptr<Table>> oid2table_;
   std::unordered_map<oid_t, std::shared_ptr<Index>> oid2index_;
+  std::unordered_map<oid_t, std::set<std::shared_ptr<Index>>> table2indexes_;
   std::unordered_map<std::string, uint32_t> table2cardinality_;
   std::unordered_map<std::string, uint32_t> col2distinct_;
 

@@ -20,8 +20,10 @@ enum class OperatorType {
   ORDERBY,
   PROJECTION,
   SEQSCAN,
+  BTREESCAN,
   UPDATE,
   VALUES,
+  RID_UNION,
 };
 
 class Operator {

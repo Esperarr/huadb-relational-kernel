@@ -20,6 +20,7 @@ class Optimizer {
   std::shared_ptr<Operator> PushDownProjection(std::shared_ptr<Operator> plan);
   std::shared_ptr<Operator> PushDownJoin(std::shared_ptr<Operator> plan);
   std::shared_ptr<Operator> PushDownSeqScan(std::shared_ptr<Operator> plan);
+  std::shared_ptr<Operator> Seq2Index(std::shared_ptr<Operator> plan);
 
   std::shared_ptr<Operator> ReorderJoin(std::shared_ptr<Operator> plan);
 

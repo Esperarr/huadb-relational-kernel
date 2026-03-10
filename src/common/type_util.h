@@ -4,7 +4,7 @@
 
 namespace huadb {
 
-enum class Type { BOOL, INT, UINT, DOUBLE, CHAR, VARCHAR, NULL_TYPE, LIST };
+enum class Type { BOOL, INT, UINT, DOUBLE, CHAR, VARCHAR, NULL_TYPE, LIST, INF, NEG_INF };
 
 class TypeUtil {
  public:

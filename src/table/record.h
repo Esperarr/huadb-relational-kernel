@@ -62,4 +62,23 @@ class Record {
   db_size_t size_;
 };
 
+/*
+ * 索引元组，由键值和指针两部分组成，前者是索引项存储的key，后者是索引指向的元组位置
+ * 对b+树，中间节点页面的索引元组ptr_指向下层页面的相应索引元组；叶子节点的ptr_指向堆表元组
+ */
+class IndexRecord : public Record {
+ public:
+  IndexRecord() = default;
+  IndexRecord(std::vector<Value> values, Rid ptr = {0, 0}) : Record(values), ptr_(ptr) {}
+  db_size_t GetSize() const;
+  db_size_t SerializeTo(char *data) const;
+  db_size_t DeserializeFrom(const char *data, const ColumnList &column_list);
+  Rid GetPtr() const;
+  void SetPtr(Rid ptr);
+  std::string ToString();
+
+ private:
+  Rid ptr_;
+};
+
 }  // namespace huadb

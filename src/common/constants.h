@@ -31,6 +31,7 @@ static constexpr size_t MAX_LOG_SIZE = sizeof(enum_t) + sizeof(xid_t) + sizeof(l
                                        sizeof(pageid_t) + sizeof(slotid_t) + sizeof(db_size_t) + sizeof(db_size_t) +
                                        MAX_RECORD_SIZE + sizeof(lsn_t);
 static constexpr size_t BUFFER_SIZE = 5;
+static constexpr db_size_t PAGE_HEADER_SIZE = sizeof(lsn_t) + sizeof(pageid_t) + sizeof(db_size_t) + sizeof(db_size_t);
 
 static constexpr lsn_t FIRST_LSN = 0;
 static constexpr lsn_t NULL_LSN = -1;
@@ -43,6 +44,7 @@ static constexpr xid_t DDL_XID = 0;
 static constexpr cid_t DDL_CID = 0;
 
 static constexpr pageid_t NULL_PAGE_ID = 0xFFFFFFFF;
+static constexpr db_size_t INVALID_SLOT = -1;
 
 // Catalog 相关
 static constexpr oid_t INVALID_OID = -1;
@@ -54,6 +56,7 @@ static constexpr oid_t TEMP_DATABASE_OID = 2;
 static constexpr oid_t TABLE_META_OID = 501;
 static constexpr oid_t DATABASE_META_OID = 502;
 static constexpr oid_t STATISTIC_META_OID = 503;
+static constexpr oid_t INDEX_META_OID = 504;
 
 static constexpr uint32_t INVALID_CARDINALITY = -1;
 static constexpr uint32_t INVALID_DISTINCT = -1;
@@ -63,6 +66,7 @@ static constexpr const char *SYSTEM_DATABASE_NAME = "system";
 static constexpr const char *TABLE_META_NAME = "huadb_table";
 static constexpr const char *DATABASE_META_NAME = "huadb_database";
 static constexpr const char *STATISTIC_META_NAME = "huadb_statistic";
+static constexpr const char *INDEX_META_NAME = "huadb_index";
 
 static constexpr const char *DEFAULT_DATABASE_NAME = "huadb";
 

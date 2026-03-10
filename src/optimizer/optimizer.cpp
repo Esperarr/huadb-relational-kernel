@@ -1,5 +1,25 @@
 #include "optimizer/optimizer.h"
 
+#include <algorithm>
+#include <climits>
+#include <iostream>
+
+#include "binder/expression.h"
+#include "common/string_util.h"
+#include "operators/btree_scan_operator.h"
+#include "operators/expressions/column_value.h"
+#include "operators/expressions/comparison.h"
+#include "operators/expressions/const.h"
+#include "operators/expressions/logic.h"
+#include "operators/expressions/null_test.h"
+#include "operators/filter_operator.h"
+#include "operators/merge_join_operator.h"
+#include "operators/nested_loop_join_operator.h"
+#include "operators/projection_operator.h"
+#include "operators/rid_union_operator.h"
+#include "operators/seqscan_operator.h"
+#include "planner/planner.h"
+
 namespace huadb {
 
 Optimizer::Optimizer(Catalog &catalog, JoinOrderAlgorithm join_order_algorithm, bool enable_projection_pushdown)
@@ -10,7 +30,13 @@ Optimizer::Optimizer(Catalog &catalog, JoinOrderAlgorithm join_order_algorithm, 
 std::shared_ptr<Operator> Optimizer::Optimize(std::shared_ptr<Operator> plan) {
   plan = SplitPredicates(plan);
   plan = PushDown(plan);
+  // std::cout << plan->ToString() << '\n';
+
   plan = ReorderJoin(plan);
+
+  // 只针对只读查询进行索引优化
+  // LAB 6 BEGIN
+  // std::cout << plan->ToString() << '\n';
   return plan;
 }
 
@@ -41,6 +67,14 @@ std::shared_ptr<Operator> Optimizer::PushDown(std::shared_ptr<Operator> plan) {
       return plan;
     }
   }
+}
+
+// 你可以定义一些辅助函数
+// LAB 6 BEGIN
+
+std::shared_ptr<Operator> Optimizer::Seq2Index(std::shared_ptr<Operator> plan) {
+  // LAB 6 BEGIN
+  return plan;
 }
 
 std::shared_ptr<Operator> Optimizer::PushDownFilter(std::shared_ptr<Operator> plan) {

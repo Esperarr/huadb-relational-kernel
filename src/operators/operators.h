@@ -3,7 +3,7 @@
 #include "operators/aggregate_operator.h"
 #include "operators/delete_operator.h"
 #include "operators/filter_operator.h"
-#include "operators/hash_join_operator.h"
+#include "operators/index_scan_operator.h"
 #include "operators/insert_operator.h"
 #include "operators/limit_operator.h"
 #include "operators/lock_rows_operator.h"

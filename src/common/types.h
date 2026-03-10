@@ -17,6 +17,9 @@ using enum_t = uint8_t;
 struct Rid {
   pageid_t page_id_;
   slotid_t slot_id_;
+  bool operator<(const Rid &other) const {
+    return (page_id_ < other.page_id_) || (page_id_ == other.page_id_ && slot_id_ < other.slot_id_);
+  }
 };
 
 struct TablePageid {

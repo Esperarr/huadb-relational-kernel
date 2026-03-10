@@ -9,6 +9,7 @@ add_subdirectory(planner)
 add_subdirectory(storage)
 add_subdirectory(table)
 add_subdirectory(transaction)
+add_subdirectory(index)
 
 add_library(huadb STATIC ${ALL_OBJECT_FILES})
 

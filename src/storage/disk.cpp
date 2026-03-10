@@ -88,6 +88,10 @@ void Disk::ReadPage(const std::string &path, pageid_t page_id, char *data) {
   }
 }
 
+pageid_t Disk::GetPageCount(const std::string &path) {
+  return (std::filesystem::file_size(path) + DB_PAGE_SIZE - 1) / DB_PAGE_SIZE;
+}
+
 void Disk::WritePage(const std::string &path, pageid_t page_id, const char *data) {
   if (!FileExists(path)) {
     return;

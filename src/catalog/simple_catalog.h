@@ -1,12 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
 #include "catalog/column_list.h"
 #include "catalog/oid_manager.h"
 #include "common/constants.h"
+#include "index/index.h"
 
 namespace huadb {
 
@@ -17,7 +19,7 @@ class Index;
 
 class SimpleCatalog {
  public:
-  SimpleCatalog(BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid = PRESERVED_OID);
+  SimpleCatalog(Disk &disk, BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid = PRESERVED_OID);
   // 创建系统表，仅初始化系统使用
   void CreateSystemTables();
   // 加载系统表，系统已经初始化过时使用
@@ -41,7 +43,8 @@ class SimpleCatalog {
   // 删除表
   void DropTable(const std::string &table_name);
   // 创建索引
-  void CreateIndex(const std::string &index_name, const std::string &table_name);
+  void CreateIndex(const std::string &index_name, const std::string &table_name,
+                   const std::vector<std::string> &column_names, IndexType index_type);
   // 删除索引
   void DropIndex(const std::string &index_name);
   // 获取当前数据库下所有表名
@@ -65,6 +68,7 @@ class SimpleCatalog {
   void SetDistinct(const std::string &table_name, const std::string &column_name, uint32_t distinct);
 
  private:
+  Disk &disk_;
   BufferPool &buffer_pool_;
   LogManager &log_manager_;
 
@@ -73,6 +77,7 @@ class SimpleCatalog {
   std::unordered_map<std::string, oid_t> name2oid_;
   std::unordered_map<oid_t, std::shared_ptr<Table>> oid2table_;
   std::unordered_map<oid_t, std::shared_ptr<Index>> oid2index_;
+  std::unordered_map<oid_t, std::set<std::shared_ptr<Index>>> table2indexes_;
   std::unordered_map<std::string, uint32_t> table2cardinality_;
   std::unordered_map<std::string, uint32_t> col2distinct_;
 

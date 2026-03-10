@@ -44,7 +44,7 @@ DatabaseEngine::DatabaseEngine() {
   buffer_pool_ = std::make_shared<BufferPool>(*disk_, *log_manager_);
   log_manager_->SetBufferPool(buffer_pool_);
 
-  catalog_ = std::make_unique<Catalog>(*buffer_pool_, *log_manager_, oid);
+  catalog_ = std::make_unique<Catalog>(*disk_, *buffer_pool_, *log_manager_, oid);
   log_manager_->SetCatalog(catalog_);
 
   // 如果不存在 init 文件，创建系统表；如存在，则载入系统表
@@ -430,12 +430,12 @@ void DatabaseEngine::DropTable(const std::string &table_name, ResultWriter &writ
 
 void DatabaseEngine::CreateIndex(const std::string &index_name, const std::string &table_name,
                                  const std::vector<std::string> &column_names, ResultWriter &writer) {
-  // Not implemented yet
+  catalog_->CreateIndex(index_name, table_name, column_names, IndexType::BTreeIndex);
   WriteOneCell("CREATE INDEX", writer);
 }
 
 void DatabaseEngine::DropIndex(const std::string &index_name, ResultWriter &writer) {
-  // Not implemented yet
+  catalog_->DropIndex(index_name);
   WriteOneCell("DROP INDEX", writer);
 }
 

@@ -54,7 +54,10 @@ std::string Record::ToString() const {
   std::string result;
   for (const auto &value : values_) {
     result += value.ToString();
-    result += ", ";
+    result += ",";
+  }
+  if (!values_.empty()) {
+    result.pop_back();
   }
   return result;
 }
@@ -127,6 +130,26 @@ void Record::UpdateSize() {
       size_ += 2;
     }
   }
+}
+
+db_size_t IndexRecord::GetSize() const { return sizeof(Rid) + Record::GetSize(); }
+
+db_size_t IndexRecord::SerializeTo(char *data) const {
+  *reinterpret_cast<Rid *>(data) = ptr_;
+  return sizeof(ptr_) + Record::SerializeTo(data + sizeof(Rid));
+}
+
+db_size_t IndexRecord::DeserializeFrom(const char *data, const ColumnList &column_list) {
+  ptr_ = *reinterpret_cast<const Rid *>(data);
+  return sizeof(ptr_) + Record::DeserializeFrom(data + sizeof(ptr_), column_list);
+}
+
+Rid IndexRecord::GetPtr() const { return ptr_; }
+
+void IndexRecord::SetPtr(Rid ptr) { ptr_ = ptr; }
+
+std::string IndexRecord::ToString() {
+  return Record::ToString() + " -> (" + std::to_string(ptr_.page_id_) + "," + std::to_string(ptr_.slot_id_) + ")";
 }
 
 }  // namespace huadb

@@ -545,18 +545,7 @@ std::shared_ptr<Operator> Planner::PlanJoin(const JoinRef &ref) {
       }
     }
   } else if (force_join_ == ForceJoin::HASH) {
-    if (join_condition->GetExprType() == OperatorExpressionType::COMPARISON) {
-      const auto expr = std::dynamic_pointer_cast<Comparison>(join_condition);
-      if (expr->GetComparisonType() == ComparisonType::EQUAL &&
-          expr->children_[0]->GetExprType() == OperatorExpressionType::COLUMN_VALUE &&
-          expr->children_[1]->GetExprType() == OperatorExpressionType::COLUMN_VALUE) {
-        auto left_key = std::dynamic_pointer_cast<ColumnValue>(expr->children_[0]);
-        auto right_key = std::dynamic_pointer_cast<ColumnValue>(expr->children_[1]);
-        auto column_list = GetJoinColumnList(*left, *right);
-        return std::make_shared<HashJoinOperator>(std::move(column_list), std::move(left), std::move(right),
-                                                  std::move(left_key), std::move(right_key), ref.join_type_);
-      }
-    }
+    // LAB 4 ADVANCED BEGIN
   }
   auto column_list = GetJoinColumnList(*left, *right);
   return std::make_shared<NestedLoopJoinOperator>(std::move(column_list), std::move(left), std::move(right),

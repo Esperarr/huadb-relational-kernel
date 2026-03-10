@@ -60,6 +60,11 @@ class Comparison : public OperatorExpression {
           between = (lhs.GetValue<double>() >= rhs.GetValues()[0].GetValue<double>()) &&
                     (lhs.GetValue<double>() <= rhs.GetValues()[1].GetValue<double>());
           break;
+        case Type::CHAR:
+        case Type::VARCHAR:
+          between = (lhs.GetValue<std::string>() >= rhs.GetValues()[0].GetValue<std::string>()) &&
+                    (lhs.GetValue<std::string>() <= rhs.GetValues()[1].GetValue<std::string>());
+          break;
         default:
           throw DbException("Type unsupported for comparison operation (between)");
       }

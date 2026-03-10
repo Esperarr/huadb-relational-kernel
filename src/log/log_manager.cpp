@@ -164,6 +164,10 @@ lsn_t LogManager::Checkpoint(bool async) {
 }
 
 void LogManager::FlushPage(oid_t table_oid, pageid_t page_id, lsn_t page_lsn) {
+  // 索引页面暂不考虑事务
+  if (page_lsn == NULL_LSN) {
+    return;
+  }
   Flush(page_lsn);
   dpt_.erase({table_oid, page_id});
 }

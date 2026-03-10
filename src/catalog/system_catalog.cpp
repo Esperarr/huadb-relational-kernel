@@ -1,19 +1,22 @@
 #include "catalog/system_catalog.h"
 
 #include <cassert>
+#include <iostream>
 
 #include "catalog/system_schema.h"
 #include "common/constants.h"
 #include "common/exceptions.h"
 #include "common/value.h"
+#include "index/btree_index.h"
+#include "index/index.h"
 #include "table/record.h"
 #include "table/table.h"
 #include "table/table_scan.h"
 
 namespace huadb {
 
-SystemCatalog::SystemCatalog(BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid)
-    : buffer_pool_(buffer_pool), log_manager_(log_manager), oid_manager_(next_oid) {}
+SystemCatalog::SystemCatalog(Disk &disk, BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid)
+    : disk_(disk), buffer_pool_(buffer_pool), log_manager_(log_manager), oid_manager_(next_oid) {}
 
 void SystemCatalog::CreateSystemTables() {
   // 创建 system 数据库
@@ -22,6 +25,7 @@ void SystemCatalog::CreateSystemTables() {
   CreateTable(TABLE_META_NAME, table_meta_schema, TABLE_META_OID, SYSTEM_DATABASE_OID, true);
   CreateTable(DATABASE_META_NAME, database_meta_schema, DATABASE_META_OID, SYSTEM_DATABASE_OID, true);
   CreateTable(STATISTIC_META_NAME, statistic_schema, STATISTIC_META_OID, SYSTEM_DATABASE_OID, true);
+  CreateTable(INDEX_META_NAME, index_meta_schema, INDEX_META_OID, SYSTEM_DATABASE_OID, true);
   // 插入默认数据库
   CreateDatabase(SYSTEM_DATABASE_NAME, false, SYSTEM_DATABASE_OID);
   CreateDatabase(DEFAULT_DATABASE_NAME, false);
@@ -35,6 +39,7 @@ void SystemCatalog::LoadSystemTables() {
   CreateTable(TABLE_META_NAME, table_meta_schema, TABLE_META_OID, SYSTEM_DATABASE_OID, false);
   CreateTable(DATABASE_META_NAME, database_meta_schema, DATABASE_META_OID, SYSTEM_DATABASE_OID, false);
   CreateTable(STATISTIC_META_NAME, statistic_schema, STATISTIC_META_OID, SYSTEM_DATABASE_OID, false);
+  CreateTable(INDEX_META_NAME, index_meta_schema, INDEX_META_OID, SYSTEM_DATABASE_OID, false);
   // 加载数据库信息
   LoadDatabaseMeta();
 
@@ -153,6 +158,7 @@ void SystemCatalog::ChangeDatabase(const std::string &database_name) {
   // 加载切换数据库的所有表
   LoadTableMeta();
   LoadStatistics();
+  LoadIndexMeta();
 }
 
 oid_t SystemCatalog::GetDatabaseOid(oid_t table_oid) const {
@@ -222,14 +228,18 @@ void SystemCatalog::DropTable(const std::string &table_name) {
     throw DbException("Table \"" + table_name + "\" does not exist");
   }
   oid_t table_oid = oid_manager_.GetEntryOid(OidType::TABLE, table_name);
-  // Step 2. 实际删除表
+
+  // Step 2. 实际删除表上的索引
+  // LAB 6 BEGIN
+
+  // Step 3. 实际删除表
   // 磁盘中删除对应项
   Disk::RemoveFile(Disk::GetFilePath(current_database_oid_, table_oid));
   oid2table_.erase(table_oid);
 
-  // Step 3. OidManager 删除对应项
+  // Step 4. OidManager 删除对应项
   oid_manager_.DropEntry(OidType::TABLE, table_name);
-  // Step 4: TableMeta 删除对应条目
+  // Step 5: TableMeta 删除对应条目
   bool deleted = false;
   auto table_meta = GetTable(TABLE_META_OID);
   auto scan = std::make_shared<TableScan>(buffer_pool_, table_meta, Rid{table_meta->GetFirstPageId(), 0});
@@ -246,9 +256,128 @@ void SystemCatalog::DropTable(const std::string &table_name) {
   }
 }
 
-void SystemCatalog::CreateIndex(const std::string &index_name, const std::string &table_name) {}
+void SystemCatalog::CreateIndex(const std::string &index_name, const std::string &table_name,
+                                const std::vector<std::string> &column_names, IndexType index_type) {
+  // Step1. 约束检测，获得必要数据结构
+  if (oid_manager_.EntryExists(OidType::INDEX, index_name)) {
+    throw DbException("Index " + index_name + " already exists.");
+  }
+  auto table_oid = GetTableOid(table_name);
+  auto table = GetTable(table_oid);
+  auto db_oid = table->GetDbOid();
+  auto table_schema = table->GetColumnList();
+  auto key_schema = std::make_shared<ColumnList>();
+  std::string column_indices;
+  for (const auto &column_name : column_names) {
+    auto idx = table_schema.GetColumnIndex(column_name);
+    auto idx_str = std::to_string(idx);
+    if (idx_str.length() == 1) {
+      idx_str = std::string("0") + idx_str;
+    }
+    column_indices += idx_str;
+    auto col = table_schema.GetColumn(idx);
+    key_schema->AddColumn(col);
+  }
+  // Step2. OidManager添加对应项
+  auto oid = oid_manager_.CreateEntry(OidType::INDEX, index_name);
+  // Step3. 创建磁盘文件，一定要在创建索引之前!!!
+  disk_.CreateFile(Disk::GetFilePath(db_oid, oid));
+  // Step4. 创建索引
+  std::shared_ptr<Index> index = nullptr;
+  switch (index_type) {
+    case IndexType::BTreeIndex: {
+      index = std::make_shared<BTreeIndex>(buffer_pool_, log_manager_, disk_, oid, db_oid, key_schema, table, true);
+      std::dynamic_pointer_cast<BTreeIndex>(index)->Build();
+      break;
+    }
+    default: {
+      throw DbException("Unsupported index type");
+    }
+  }
+  // debug
+  index->Draw(table_name + "_" + index_name);
+  // Step5. 写入catalog
+  oid2index_[oid] = index;
+  table2indexes_[table_oid].emplace(index);
+  // Step6. IndexMeta中添加对应记录
+  assert(db_oid != INVALID_OID);
+  std::vector<Value> values;
+  values.emplace_back(oid);
+  values.emplace_back(table_oid);
+  values.emplace_back(index_name);
+  values.emplace_back(static_cast<int32_t>(index_type));
+  values.emplace_back(column_indices);
+  GetTable(INDEX_META_OID)->InsertRecord(std::make_shared<Record>(std::move(values)), DDL_XID, DDL_CID, false);
+}
 
-void SystemCatalog::DropIndex(const std::string &index_name) {}
+void SystemCatalog::CreateIndex(oid_t oid, oid_t table_oid, const std::string &index_name, IndexType index_type,
+                                std::string &column_indices) {
+  // Step1. 约束检测，获得必要数据结构
+  if (oid_manager_.EntryExists(OidType::INDEX, index_name)) {
+    throw DbException("Index " + index_name + " already exists.");
+  }
+  auto table = GetTable(table_oid);
+  auto db_oid = table->GetDbOid();
+  auto table_schema = table->GetColumnList();
+  auto key_schema = std::make_shared<ColumnList>();
+  auto npage = disk_.GetPageCount(Disk::GetFilePath(db_oid, oid));
+  for (size_t i = 0; i < column_indices.length(); i += 2) {
+    auto idx = std::stoi(column_indices.substr(i, 2));
+    key_schema->AddColumn(table_schema.GetColumn(idx));
+  }
+  // Step2. 在oid_manager_中使用指定oid添加条目
+  oid_manager_.SetEntryOid(OidType::INDEX, index_name, oid);
+  // Step3. 建立索引对象
+  std::shared_ptr<Index> index = nullptr;
+  switch (index_type) {
+    case IndexType::BTreeIndex: {
+      index =
+          std::make_shared<BTreeIndex>(buffer_pool_, log_manager_, disk_, oid, db_oid, key_schema, table, false, npage);
+      break;
+    }
+    default: {
+      throw DbException("Unsupported index type");
+    }
+  }
+  // Step4. 写入catalog
+  oid2index_[oid] = index;
+  table2indexes_[table_oid].emplace(index);
+}
+
+void SystemCatalog::DropIndex(const std::string &index_name) {
+  // Step1. 约束检测
+  CheckUsingDatabase();
+  assert(current_database_oid_ != SYSTEM_DATABASE_OID);
+  if (!oid_manager_.EntryExists(OidType::INDEX, index_name)) {
+    throw DbException("Index " + index_name + " does not exist.");
+  }
+  oid_t index_oid = oid_manager_.GetEntryOid(OidType::INDEX, index_name);
+  // Step2. 在磁盘中实际删除索引
+  // 磁盘中删除对应项
+  disk_.RemoveFile(Disk::GetFilePath(current_database_oid_, index_oid));
+  // Step3. OidManager删除对应项
+  oid_manager_.DropEntry(OidType::INDEX, index_name);
+  // Step4. 从 name2oid, oid2index_ 和 table2indexes_ 中删除对应项
+  name2oid_.erase(index_name);
+  auto table_oid = oid2index_[index_oid]->GetTableOid();
+  table2indexes_.at(table_oid).erase(oid2index_[index_oid]);
+  oid2index_.erase(index_oid);
+  // Step5: IndexMeta 删除对应条目
+  auto index_meta = GetTable(INDEX_META_OID);
+  auto scan = std::make_shared<TableScan>(buffer_pool_, index_meta, Rid{index_meta->GetFirstPageId(), 0});
+  auto index_oid_idx = index_meta_schema.GetColumnIndex("index_oid");
+  auto deleted = false;
+  while (auto record = scan->GetNextRecord()) {
+    if (record->GetValue(index_oid_idx).GetValue<oid_t>() == index_oid) {
+      index_meta->DeleteRecord(record->GetRid(), DDL_XID, false);
+      deleted = true;
+      break;
+    }
+  }
+  if (!deleted) {
+    throw DbException("Index " + index_name + " does not exist in table_meta.");
+  }
+}
 
 std::vector<std::string> SystemCatalog::GetTableNames() const {
   if (current_database_oid_ == INVALID_OID) {
@@ -273,6 +402,13 @@ std::shared_ptr<Table> SystemCatalog::GetTable(oid_t oid) const {
     throw DbException("Table with oid " + std::to_string(oid) + " does not exist");
   }
   return oid2table_.at(oid);
+}
+
+std::set<std::shared_ptr<Index>> SystemCatalog::GetTableIndex(oid_t table_oid) const {
+  if (table2indexes_.find(table_oid) == table2indexes_.end()) {
+    return std::set<std::shared_ptr<Index>>();
+  }
+  return table2indexes_.at(table_oid);
 }
 
 oid_t SystemCatalog::GetTableOid(const std::string &table_name) const {
@@ -454,6 +590,24 @@ void SystemCatalog::LoadStatistics() {
       auto n_distinct = record->GetValue(n_distinct_idx).GetValue<uint32_t>();
       col2distinct_[table_name + "." + column_name] = n_distinct;
     }
+  }
+}
+
+void SystemCatalog::LoadIndexMeta() {
+  auto index_meta = GetTable(INDEX_META_OID);
+  auto scan = std::make_shared<TableScan>(buffer_pool_, index_meta, Rid{index_meta->GetFirstPageId(), 0});
+  auto index_oid_idx = index_meta_schema.GetColumnIndex("index_oid");
+  auto table_oid_idx = index_meta_schema.GetColumnIndex("table_oid");
+  auto index_name_idx = index_meta_schema.GetColumnIndex("index_name");
+  auto index_type_idx = index_meta_schema.GetColumnIndex("index_type");
+  auto column_indices_idx = index_meta_schema.GetColumnIndex("column_indices");
+  while (auto record = scan->GetNextRecord()) {
+    auto oid = record->GetValue(index_oid_idx).GetValue<oid_t>();
+    auto table_oid = record->GetValue(table_oid_idx).GetValue<oid_t>();
+    auto index_name = record->GetValue(index_name_idx).GetValue<std::string>();
+    auto index_type = record->GetValue(index_type_idx).GetValue<int32_t>();
+    auto column_indices = record->GetValue(column_indices_idx).GetValue<std::string>();
+    CreateIndex(oid, table_oid, index_name, static_cast<IndexType>(index_type), column_indices);
   }
 }
 

@@ -13,6 +13,7 @@ class Value {
  public:
   Value();
   Value(Type type, db_size_t size);
+  explicit Value(Type type);
   explicit Value(bool val);
   explicit Value(int32_t val);
   explicit Value(uint32_t val);

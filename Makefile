@@ -36,12 +36,15 @@ format:
 	done
 
 lab%-only:
+	rm -rf huadb_test/huadb_data/
 	./build/debug/bin/sqllogictest test/lab$*/*.test
 
 lab%:
+	rm -rf huadb_test/huadb_data/
 	./build/debug/bin/sqllogictest test/lab{0..$*}/*.test
 
 shell:
+	rm -rf huadb_data/
 	./build/debug/bin/shell
 
 server:

@@ -5,12 +5,13 @@
 
 #include "common/constants.h"
 #include "common/exceptions.h"
+#include "index/btree_index.h"
 #include "table/table.h"
 
 namespace huadb {
 
-SimpleCatalog::SimpleCatalog(BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid)
-    : buffer_pool_(buffer_pool), log_manager_(log_manager), oid_manager_(next_oid) {}
+SimpleCatalog::SimpleCatalog(Disk &disk, BufferPool &buffer_pool, LogManager &log_manager, oid_t next_oid)
+    : disk_(disk), buffer_pool_(buffer_pool), log_manager_(log_manager), oid_manager_(next_oid) {}
 
 void SimpleCatalog::CreateSystemTables() {
   Disk::CreateDirectory(std::to_string(TEMP_DATABASE_OID));
@@ -132,8 +133,9 @@ void SimpleCatalog::DropTable(const std::string &table_name) {
   db_out << "~" << table_name << " ";
 }
 
-void SimpleCatalog::CreateIndex(const std::string &index_name, const std::string &table_name) {
-  throw DbException("ChangeIndex not implemented in SimpleCatalog");
+void SimpleCatalog::CreateIndex(const std::string &index_name, const std::string &table_name,
+                                const std::vector<std::string> &column_names, IndexType index_type) {
+  throw DbException("CreateIndex not implemented in SimpleCatalog");
 }
 
 void SimpleCatalog::DropIndex(const std::string &index_name) {

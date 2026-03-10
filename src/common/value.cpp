@@ -11,6 +11,8 @@ Value::Value() : is_null_(true), type_(Type::NULL_TYPE), size_(0) {}
 
 Value::Value(Type type, db_size_t size) : type_(type), size_(size), is_null_(true) {}
 
+Value::Value(Type type) : type_(type), size_(0), is_null_(false) {}
+
 Value::Value(bool val) : type_(Type::BOOL), size_(TypeUtil::TypeSize(Type::BOOL)) { val_.bool_ = val; }
 
 Value::Value(int32_t val) : type_(Type::INT), size_(TypeUtil::TypeSize(Type::INT)) { val_.int_ = val; }
@@ -58,6 +60,10 @@ std::string Value::ToString() const {
     case Type::CHAR:
     case Type::VARCHAR:
       return str_;
+    case Type::INF:
+      return "inf";
+    case Type::NEG_INF:
+      return "-inf";
     default:
       throw DbException("Unknown value type in ToString");
   }
@@ -174,7 +180,22 @@ const char *Value::GetValue<const char *>() const {
 }
 
 bool Value::Less(const Value &other) const {
-  if (type_ != other.type_) {
+  if ((type_ == Type::INF && other.type_ == Type::INF) || (type_ == Type::NEG_INF && other.type_ == Type::NEG_INF)) {
+    return false;
+  }
+  if (type_ == Type::INF) {
+    return false;
+  }
+  if (other.type_ == Type::INF) {
+    return true;
+  }
+  if (type_ == Type::NEG_INF) {
+    return true;
+  }
+  if (other.type_ == Type::NEG_INF) {
+    return false;
+  }
+  if (type_ != other.type_ && !(TypeUtil::IsString(type_) && TypeUtil::IsString(other.type_))) {
     throw DbException("Type mismatch (in Less)");
   }
   switch (type_) {
@@ -191,7 +212,13 @@ bool Value::Less(const Value &other) const {
 }
 
 bool Value::Equal(const Value &other) const {
-  if (type_ != other.type_) {
+  if ((type_ == Type::INF && other.type_ == Type::INF) || (type_ == Type::NEG_INF && other.type_ == Type::NEG_INF)) {
+    return true;
+  }
+  if (type_ == Type::NEG_INF || type_ == Type::INF || other.type_ == Type::INF || other.type_ == Type::NEG_INF) {
+    return false;
+  }
+  if (type_ != other.type_ && !(TypeUtil::IsString(type_) && TypeUtil::IsString(other.type_))) {
     throw DbException("Type mismatch (in Equal)");
   }
   switch (type_) {
@@ -210,7 +237,22 @@ bool Value::Equal(const Value &other) const {
 }
 
 bool Value::Greater(const Value &other) const {
-  if (type_ != other.type_) {
+  if ((type_ == Type::INF && other.type_ == Type::INF) || (type_ == Type::NEG_INF && other.type_ == Type::NEG_INF)) {
+    return false;
+  }
+  if (type_ == Type::INF) {
+    return true;
+  }
+  if (other.type_ == Type::INF) {
+    return false;
+  }
+  if (type_ == Type::NEG_INF) {
+    return false;
+  }
+  if (other.type_ == Type::NEG_INF) {
+    return true;
+  }
+  if (type_ != other.type_ && !(TypeUtil::IsString(type_) && TypeUtil::IsString(other.type_))) {
     throw DbException("Type mismatch (in Greater)");
   }
   switch (type_) {

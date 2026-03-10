@@ -1,8 +1,10 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "executors/aggregate_executor.h"
+#include "executors/btree_scan_executor.h"
 #include "executors/delete_executor.h"
 #include "executors/executor.h"
 #include "executors/executor_context.h"
@@ -16,6 +18,7 @@
 #include "executors/nested_loop_join_executor.h"
 #include "executors/orderby_executor.h"
 #include "executors/projection_executor.h"
+#include "executors/rid_union_executor.h"
 #include "executors/seqscan_executor.h"
 #include "executors/update_executor.h"
 #include "executors/values_executor.h"
@@ -29,6 +32,10 @@ class ExecutorFactory {
       case OperatorType::SEQSCAN: {
         auto seqscan_operator = std::dynamic_pointer_cast<const SeqScanOperator>(plan);
         return std::make_unique<SeqScanExecutor>(context, std::move(seqscan_operator));
+      }
+      case OperatorType::BTREESCAN: {
+        auto btree_scan_operator = std::dynamic_pointer_cast<const BTreeScanOperator>(plan);
+        return std::make_unique<BTreeScanExecutor>(context, std::move(btree_scan_operator));
       }
       case OperatorType::INSERT: {
         auto insert_operator = std::dynamic_pointer_cast<const InsertOperator>(plan);
@@ -79,6 +86,14 @@ class ExecutorFactory {
         auto filter_operator = std::dynamic_pointer_cast<const FilterOperator>(plan);
         auto child = CreateExecutor(context, plan->GetChildren()[0]);
         return std::make_unique<FilterExecutor>(context, std::move(filter_operator), std::move(child));
+      }
+      case OperatorType::RID_UNION: {
+        auto rid_union_operator = std::dynamic_pointer_cast<const RidUnionOperator>(plan);
+        std::vector<std::shared_ptr<Executor>> children;
+        for (size_t i = 0; i < plan->GetChildren().size(); ++i) {
+          children.emplace_back(CreateExecutor(context, plan->GetChildren()[i]));
+        }
+        return std::make_unique<RidUnionExecutor>(context, std::move(rid_union_operator), children);
       }
       case OperatorType::LIMIT: {
         auto limit_operator = std::dynamic_pointer_cast<const LimitOperator>(plan);

@@ -1,3 +1,7 @@
+if(${LAB6})
+  add_definitions(-DLAB6)
+endif()
+
 add_library(
   optimizer
   OBJECT

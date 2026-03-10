@@ -13,6 +13,8 @@ add_library(
   orderby_executor.cpp
   projection_executor.cpp
   seqscan_executor.cpp
+  btree_scan_executor.cpp
+  rid_union_executor.cpp
   update_executor.cpp
   values_executor.cpp
 )

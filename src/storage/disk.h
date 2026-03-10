@@ -26,6 +26,7 @@ class Disk {
 
   void OpenFile(const std::string &path);
   void CloseFile(const std::string &path);
+  pageid_t GetPageCount(const std::string &path);
 
   void ReadPage(const std::string &path, pageid_t page_id, char *data);
   void WritePage(const std::string &path, pageid_t page_id, const char *data);
