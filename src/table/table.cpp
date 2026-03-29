@@ -37,7 +37,51 @@ Rid Table::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_t cid, bo
   // 找到空间足够的页面后，通过 TablePage 插入记录
   // 返回插入记录的 rid
   // LAB 1 BEGIN
-  return {0, 0};
+  db_size_t record_size = record->GetSize();
+  // 表还没有任何页面，先创建第一个页面
+  if (first_page_id_ == NULL_PAGE_ID) {
+    first_page_id_ = 0;
+    auto page = buffer_pool_.NewPage(db_oid_, oid_, 0);
+    TablePage table_page(page);
+    table_page.Init();
+    slotid_t slot_id = table_page.InsertRecord(record, xid, cid);
+    return Rid{0, slot_id};
+  }
+
+  // 遍历链表找到第一个有空间的页面，同时记录链表最后一页的 page_id
+  pageid_t target_page_id = NULL_PAGE_ID;  // 找到的有空间的页面
+  pageid_t last_page_id = first_page_id_;  // 链表最后一页
+
+  pageid_t cur = first_page_id_;
+  while (cur != NULL_PAGE_ID) {
+    auto page = buffer_pool_.GetPage(db_oid_, oid_, cur);
+    TablePage table_page(page);
+    // 找到第一个有空间的页面就记下来，但继续遍历找到链表尾
+    if (target_page_id == NULL_PAGE_ID && table_page.GetFreeSpaceSize() >= record_size) {
+      target_page_id = cur;
+    }
+    last_page_id = cur;
+    cur = table_page.GetNextPageId();
+  }
+  // 找到了有空间的页面，直接插入
+  if (target_page_id != NULL_PAGE_ID) {
+    auto page = buffer_pool_.GetPage(db_oid_, oid_, target_page_id);
+    TablePage table_page(page);
+    slotid_t slot_id = table_page.InsertRecord(record, xid, cid);
+    return Rid{target_page_id, slot_id};
+  }
+  // 所有页面都满，在链表尾追加新页面
+  else{
+    pageid_t new_id = last_page_id + 1;
+    auto last_page = buffer_pool_.GetPage(db_oid_, oid_, last_page_id);
+    TablePage last_table_page(last_page);
+    last_table_page.SetNextPageId(new_id);
+    auto new_page = buffer_pool_.NewPage(db_oid_, oid_, new_id);
+    TablePage new_table_page(new_page);
+    new_table_page.Init();
+    slotid_t slot_id = new_table_page.InsertRecord(record, xid, cid);
+    return Rid{new_id, slot_id};
+  }
 }
 
 void Table::DeleteRecord(const Rid &rid, xid_t xid, bool write_log) {
@@ -47,6 +91,9 @@ void Table::DeleteRecord(const Rid &rid, xid_t xid, bool write_log) {
 
   // 使用 TablePage 操作页面
   // LAB 1 BEGIN
+  std::shared_ptr<Page> page = buffer_pool_.GetPage(db_oid_, oid_, rid.page_id_);
+  auto table_page = std::make_unique<TablePage>(page);
+  table_page->DeleteRecord(rid.slot_id_, xid);
 }
 
 Rid Table::UpdateRecord(const Rid &rid, xid_t xid, cid_t cid, std::shared_ptr<Record> record, bool write_log) {

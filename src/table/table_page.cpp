@@ -37,6 +37,14 @@ slotid_t TablePage::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_
   // 将 page 标记为 dirty
   // 返回插入的 slot id
   // LAB 1 BEGIN
+  db_size_t record_size = record->GetSize();
+  *upper_-= record_size;
+  *lower_+= sizeof(Slot);
+  slotid_t slot_id = GetRecordCount() - 1;
+  slots_[slot_id].offset_ = *upper_;
+  slots_[slot_id].size_ = record_size;
+  record->SerializeTo(page_data_ + slots_[slot_id].offset_);
+  page_->SetDirty();
   return 0;
 }
 
@@ -48,6 +56,12 @@ void TablePage::DeleteRecord(slotid_t slot_id, xid_t xid) {
   // 可使用 Record::DeserializeHeaderFrom 函数读取记录头
   // 将 page 标记为 dirty
   // LAB 1 BEGIN
+  db_size_t offset=slots_[slot_id].offset_;
+  Record record;
+  record.DeserializeHeaderFrom(page_data_ + offset);
+  record.SetDeleted(true);
+  record.SerializeHeaderTo(page_data_ + offset);
+  page_->SetDirty();
 }
 
 void TablePage::UpdateRecordInPlace(const Record &record, slotid_t slot_id) {
@@ -59,7 +73,11 @@ std::shared_ptr<Record> TablePage::GetRecord(Rid rid, const ColumnList &column_l
   // 根据 slot_id 获取 record
   // 新建 record 并设置 rid
   // LAB 1 BEGIN
-  return nullptr;
+  const char *record_data = page_data_ + slots_[rid.slot_id_].offset_;
+  auto result = std::make_shared<Record>();
+  result->DeserializeFrom(record_data, column_list);
+  result->SetRid(rid);
+  return result;
 }
 
 void TablePage::UndoDeleteRecord(slotid_t slot_id) {
