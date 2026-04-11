@@ -1,4 +1,6 @@
 #include "log/log_records/new_page_log.h"
+#include "table/table.h"
+#include "table/table_page.h"
 
 namespace huadb {
 
@@ -40,6 +42,14 @@ std::shared_ptr<NewPageLog> NewPageLog::DeserializeFrom(lsn_t lsn, const char *d
 
 void NewPageLog::Undo(BufferPool &buffer_pool, Catalog &catalog, LogManager &log_manager, lsn_t undo_next_lsn) {
   // LAB 2 BEGIN
+  if (!catalog.TableExists(oid_)) return;
+  auto table = catalog.GetTable(oid_);
+  oid_t db_oid = table->GetDbOid();
+  if (prev_page_id_ != NULL_PAGE_ID) {
+    auto prev_page = buffer_pool.GetPage(db_oid, oid_, prev_page_id_);
+    TablePage prev_table_page(prev_page);
+    prev_table_page.SetNextPageId(NULL_PAGE_ID);
+  }
 }
 
 void NewPageLog::Redo(BufferPool &buffer_pool, Catalog &catalog, LogManager &log_manager) {
@@ -49,6 +59,18 @@ void NewPageLog::Redo(BufferPool &buffer_pool, Catalog &catalog, LogManager &log
   }
   // 根据日志信息进行重做
   // LAB 2 BEGIN
+  auto table = catalog.GetTable(oid_);
+  oid_t db_oid = table->GetDbOid();
+  auto page = buffer_pool.NewPage(db_oid, oid_, page_id_);// 初始化新页面，页面可能不存在，所以使用NewPage
+  TablePage table_page(page);
+  table_page.Init();
+  table_page.SetPageLSN(lsn_);
+  if (prev_page_id_ != NULL_PAGE_ID) {// 如果不是第一个页面，更新前一个页面的链接
+    auto prev_page = buffer_pool.GetPage(db_oid, oid_, prev_page_id_);
+    TablePage prev_table_page(prev_page);
+    prev_table_page.SetNextPageId(page_id_);
+    prev_table_page.SetPageLSN(lsn_);
+  }
 }
 
 oid_t NewPageLog::GetOid() const { return oid_; }

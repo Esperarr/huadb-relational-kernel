@@ -44,7 +44,19 @@ Rid Table::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_t cid, bo
     auto page = buffer_pool_.NewPage(db_oid_, oid_, 0);
     TablePage table_page(page);
     table_page.Init();
+    if (write_log) {
+      // 写新建页面日志（prev_page_id 为 NULL_PAGE_ID）
+      lsn_t lsn = log_manager_.AppendNewPageLog(xid, oid_, NULL_PAGE_ID, 0);
+      table_page.SetPageLSN(lsn);
+    }
     slotid_t slot_id = table_page.InsertRecord(record, xid, cid);
+    if (write_log) {
+      lsn_t lsn = log_manager_.AppendInsertLog(xid, oid_, 0, slot_id,
+                                                table_page.GetUpper(),
+                                                record_size,
+                                                page->GetData() + table_page.GetUpper());
+      table_page.SetPageLSN(lsn);
+    }
     return Rid{0, slot_id};
   }
 
@@ -68,6 +80,13 @@ Rid Table::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_t cid, bo
     auto page = buffer_pool_.GetPage(db_oid_, oid_, target_page_id);
     TablePage table_page(page);
     slotid_t slot_id = table_page.InsertRecord(record, xid, cid);
+    if (write_log) {
+      lsn_t lsn = log_manager_.AppendInsertLog(xid, oid_, target_page_id, slot_id,
+                                                table_page.GetUpper(),
+                                                record_size,
+                                                page->GetData() + table_page.GetUpper());
+      table_page.SetPageLSN(lsn);
+    }
     return Rid{target_page_id, slot_id};
   }
   // 所有页面都满，在链表尾追加新页面
@@ -79,7 +98,19 @@ Rid Table::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_t cid, bo
     auto new_page = buffer_pool_.NewPage(db_oid_, oid_, new_id);
     TablePage new_table_page(new_page);
     new_table_page.Init();
+    if (write_log) {
+      lsn_t lsn = log_manager_.AppendNewPageLog(xid, oid_, last_page_id, new_id);
+      new_table_page.SetPageLSN(lsn);
+      last_table_page.SetPageLSN(lsn);
+    }
     slotid_t slot_id = new_table_page.InsertRecord(record, xid, cid);
+    if (write_log) {
+      lsn_t lsn = log_manager_.AppendInsertLog(xid, oid_, new_id, slot_id,
+                                                new_table_page.GetUpper(),
+                                                record_size,
+                                                new_page->GetData() + new_table_page.GetUpper());
+      new_table_page.SetPageLSN(lsn);
+    }
     return Rid{new_id, slot_id};
   }
 }
@@ -93,6 +124,10 @@ void Table::DeleteRecord(const Rid &rid, xid_t xid, bool write_log) {
   // LAB 1 BEGIN
   std::shared_ptr<Page> page = buffer_pool_.GetPage(db_oid_, oid_, rid.page_id_);
   auto table_page = std::make_unique<TablePage>(page);
+  if (write_log) {
+    lsn_t lsn = log_manager_.AppendDeleteLog(xid, oid_, rid.page_id_, rid.slot_id_);
+    table_page->SetPageLSN(lsn);
+  }
   table_page->DeleteRecord(rid.slot_id_, xid);
 }
 

@@ -45,7 +45,7 @@ slotid_t TablePage::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_
   slots_[slot_id].size_ = record_size;
   record->SerializeTo(page_data_ + slots_[slot_id].offset_);
   page_->SetDirty();
-  return 0;
+  return slot_id;
 }
 
 void TablePage::DeleteRecord(slotid_t slot_id, xid_t xid) {
@@ -87,6 +87,12 @@ void TablePage::UndoDeleteRecord(slotid_t slot_id) {
   // 清除记录的删除标记
   // 将页面设为 dirty
   // LAB 2 BEGIN
+  db_size_t offset = slots_[slot_id].offset_;
+  Record record;
+  record.DeserializeHeaderFrom(page_data_ + offset);
+  record.SetDeleted(false);   // 清除删除标记
+  record.SerializeHeaderTo(page_data_ + offset);
+  page_->SetDirty();
 }
 
 void TablePage::RedoInsertRecord(slotid_t slot_id, char *raw_record, db_size_t page_offset, db_size_t record_size) {
@@ -94,6 +100,14 @@ void TablePage::RedoInsertRecord(slotid_t slot_id, char *raw_record, db_size_t p
   // 注意维护 lower 和 upper 指针，以及 slots 数组
   // 将页面设为 dirty
   // LAB 2 BEGIN
+  // 如果 slot 已存在则跳过（幂等性保证）
+  if (slot_id < GetRecordCount()) return;
+  *upper_ = page_offset;
+  *lower_ += sizeof(Slot);
+  slots_[slot_id].offset_ = page_offset;
+  slots_[slot_id].size_ = record_size;
+  memcpy(page_data_ + page_offset, raw_record, record_size);
+  page_->SetDirty();
 }
 
 db_size_t TablePage::GetRecordCount() const { return (*lower_ - PAGE_HEADER_SIZE) / sizeof(Slot); }
