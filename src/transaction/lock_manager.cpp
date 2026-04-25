@@ -71,15 +71,11 @@ void LockManager::ReleaseLocks(xid_t xid) {
   std::lock_guard<std::mutex> lk(latch_);
   for (auto &kv : table_locks_) {
     auto &v = kv.second;
-    v.erase(std::remove_if(v.begin(), v.end(),
-                           [xid](const LockHolder &h) { return h.xid_ == xid; }),
-            v.end());
+    v.erase(std::remove_if(v.begin(), v.end(), [xid](const LockHolder &h) { return h.xid_ == xid; }), v.end());
   }
   for (auto &kv : row_locks_) {
     auto &v = kv.second;
-    v.erase(std::remove_if(v.begin(), v.end(),
-                           [xid](const LockHolder &h) { return h.xid_ == xid; }),
-            v.end());
+    v.erase(std::remove_if(v.begin(), v.end(), [xid](const LockHolder &h) { return h.xid_ == xid; }), v.end());
   }
 }
 
@@ -88,35 +84,28 @@ void LockManager::SetDeadLockType(DeadlockType deadlock_type) { deadlock_type_ =
 bool LockManager::Compatible(LockType type_a, LockType type_b) const {
   // 判断锁是否相容
   // LAB 3 BEGIN
-  if (type_a == LockType::X || type_b == LockType::X) return false;
-  if (type_a == LockType::IS) return true;  // IS 与 IS/IX/S/SIX 都兼容
+  if (type_a == LockType::X || type_b == LockType::X) return false;// 任一是 X 就不兼容
+  if (type_a == LockType::IS) return true;  // IS 与任意锁都兼容
   if (type_b == LockType::IS) return true;
-  if (type_a == LockType::SIX || type_b == LockType::SIX) return false;
-  // 此时 a, b ∈ {IX, S}
-  if (type_a == LockType::IX && type_b == LockType::IX) return true;
-  if (type_a == LockType::S && type_b == LockType::S) return true;
-  // 剩下的就是 IX 和 S 的组合
-  return false;
+  if (type_a == LockType::SIX || type_b == LockType::SIX) return false;// 任一是 SIX 就不兼容
+  // 此时a, b在{IX, S}
+  if (type_a == LockType::IX && type_b == LockType::IX) return true;// IX 与 IX 兼容
+  if (type_a == LockType::S && type_b == LockType::S) return true;// S 与 S 兼容
+  return false;// S 与 IX 不兼容
 }
 
 LockType LockManager::Upgrade(LockType self, LockType other) const {
   // 升级锁类型
   // LAB 3 BEGIN
-  // 锁强度：IS < IX,S < SIX < X
-  // X 最强
-  if (self == LockType::X || other == LockType::X) return LockType::X;
-  // S + IX = SIX，IX + S = SIX
+  if (self == LockType::X || other == LockType::X) return LockType::X;// 任一是 X 就是 X
   if ((self == LockType::S && other == LockType::IX) ||
-      (self == LockType::IX && other == LockType::S)) {
+      (self == LockType::IX && other == LockType::S)) {// S + IX = SIX，IX + S = SIX
     return LockType::SIX;
   }
-  // SIX 大于 IS/IX/S
-  if (self == LockType::SIX || other == LockType::SIX) return LockType::SIX;
-  // 任一是 IS 就取另一个（IS 最弱）
-  if (self == LockType::IS) return other;
+  if (self == LockType::SIX || other == LockType::SIX) return LockType::SIX;// 任一是 SIX 就是 SIX
+  if (self == LockType::IS) return other;// 任一是 IS ，取另一个
   if (other == LockType::IS) return self;
-  // 同类
-  return self;
+  return self;// S+S = S，IX+IX = IX
 }
 
 }  // namespace huadb

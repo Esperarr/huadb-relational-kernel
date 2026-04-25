@@ -52,55 +52,42 @@ bool TableScan::IsVisible(const Record &record, xid_t xid, IsolationLevel isolat
   //         << " rcid=" << rcid << " xid=" << xid << " cid=" << cid << "\n";
   // 判断"插入"对当前事务是否可见
   bool xmin_visible = false;
-  if (xmin == xid) {
-    // 自己事务插入的
-    // 万圣节问题：不能看到当前 SQL 自己插入的（cid 比当前大或相等）
-    if (rcid >= cid) return false;
+  if (xmin == xid) {// 自己事务插入的
+    if (rcid >= cid) return false;// 万圣节问题：不能看到当前 SQL 自己插入的（cid 比当前大或相等）
     xmin_visible = true;
-  } else {
-    // 别的事务插入的
-    // 通用规则（同时适用 RC/RR/SER）：xmin 不在我的活跃集合里 ——在我"快照点"时它已结束——可见;xmin 在我的活跃集合里——在我"快照点"时还活跃——不可见
-    // 本框架 active_xids 由 SeqScan 根据隔离级别选择不同时机取得：RC: 当前调用时刻的活跃集合（每条 SQL 重新拍）;RR/SER: 事务开始时的活跃集合
-    if (active_xids.count(xmin) > 0) {
+  } else {// 其他事务插入的
+    if (active_xids.count(xmin) > 0) {// 插入者在我快照下还活跃
       xmin_visible = false;
-    } else {
-      // 还要排除"在我快照点之后才启动并提交"的事务（仅 RR/SER 需要）
-      if (isolation_level == IsolationLevel::REPEATABLE_READ ||
-          isolation_level == IsolationLevel::SERIALIZABLE) {
+    } else {// 插入者已结束
+      if (isolation_level == IsolationLevel::REPEATABLE_READ || isolation_level == IsolationLevel::SERIALIZABLE) {
         if (xmin > xid) {
           xmin_visible = false;
         } else {
           xmin_visible = true;
         }
       } else {
-        // RC：只要它已结束（不在活跃集合里）就可见
         xmin_visible = true;
       }
     }
   }
   if (!xmin_visible) return false;
   // 判断"删除"是否使本记录对当前事务不可见
-  if (xmax == NULL_XID) {
-    return true;  // 未被删除
+  if (xmax == NULL_XID) { // 未被删除
+    return true; 
   }
-  if (xmax == xid) {
-    // 自己删的（DeleteRecord 没传 cid，所以这里直接当作"已不可见"）
+  if (xmax == xid) {// 被自己删除
     return false;
   } else {
-    if (active_xids.count(xmax) > 0) {
-      // 删除者在我快照下还活跃—— 删除对我无效，还能看到
+    if (active_xids.count(xmax) > 0) {// 删除在我快照下还活跃
       return true;
-    }
-    // 删除者已结束
-    if (isolation_level == IsolationLevel::REPEATABLE_READ ||
-        isolation_level == IsolationLevel::SERIALIZABLE) {
-      if (xmax > xid) {
-        // 我开始之后才启动并提交的事务的删除——对我无效
-        return true;
+    } else {// 删除已结束
+      if (isolation_level == IsolationLevel::REPEATABLE_READ || isolation_level == IsolationLevel::SERIALIZABLE) {
+        if (xmax > xid) {
+          return true;
+        }
       }
+      return false;
     }
-    // RC（或 xmax<=xid 的 RR/SER）：删除者已提交且对我可见——已删
-    return false;
   }
 }
 }  // namespace huadb
