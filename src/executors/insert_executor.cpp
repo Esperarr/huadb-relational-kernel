@@ -1,5 +1,6 @@
 #include "executors/insert_executor.h"
 
+#include "common/exceptions.h"
 namespace huadb {
 
 InsertExecutor::InsertExecutor(ExecutorContext &context, std::shared_ptr<const InsertOperator> plan,
@@ -27,7 +28,13 @@ std::shared_ptr<Record> InsertExecutor::Next() {
     auto table_record = std::make_shared<Record>(std::move(values));
     // 通过 context_ 获取正确的锁，加锁失败时抛出异常
     // LAB 3 BEGIN
+    if (!context_.GetLockManager().LockTable(context_.GetXid(), LockType::IX, plan_->GetTableOid())) {
+      throw DbException("InsertExecutor: lock table IX failed");
+    }
     auto rid = table_->InsertRecord(std::move(table_record), context_.GetXid(), context_.GetCid(), true);
+    if (!context_.GetLockManager().LockRow(context_.GetXid(), LockType::X, plan_->GetTableOid(), rid)) {
+      throw DbException("InsertExecutor: lock row X failed");
+    }
     count++;
   }
   finished_ = true;

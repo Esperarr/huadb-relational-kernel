@@ -1,6 +1,9 @@
 #pragma once
 
 #include "common/types.h"
+#include <map>
+#include <mutex>
+#include <unordered_map>
 
 namespace huadb {
 
@@ -34,6 +37,17 @@ class LockManager {
   bool Compatible(LockType type_a, LockType type_b) const;
   // 实现锁的升级，如共享锁升级为互斥锁，输入两种锁的类型，返回升级后的锁类型
   LockType Upgrade(LockType self, LockType other) const;
+  struct LockHolder {
+    xid_t xid_;
+    LockType type_;
+  };
+
+  // 表锁：oid -> 持有者列表
+  std::unordered_map<oid_t, std::vector<LockHolder>> table_locks_;
+  // 行锁：(oid, rid) -> 持有者列表
+  std::map<std::pair<oid_t, Rid>, std::vector<LockHolder>> row_locks_;
+
+  std::mutex latch_;
 
   DeadlockType deadlock_type_ = DeadlockType::NONE;
 };

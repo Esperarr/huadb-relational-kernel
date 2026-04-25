@@ -280,13 +280,17 @@ void LogManager::Analyze() {
   // LAB 2 BEGIN
   // 从checkpoint_lsn开始读取日志，恢复att_和dpt_
   lsn_t lsn = checkpoint_lsn;
+  xid_t max_xid = 0;
   while (lsn < next_lsn_) {
     auto data = std::make_unique<char[]>(MAX_LOG_SIZE);
     disk_.ReadLog(lsn, MAX_LOG_SIZE, data.get());
     auto log_record = LogRecord::DeserializeFrom(lsn, data.get());
     LogType log_type = log_record->GetType();
     xid_t xid = log_record->GetXid();
-    // END_CHECKPOINT给出初始状态，之后的日志对其进行增量更新
+    // 跟踪日志中出现过的最大 xid
+    if (xid != NULL_XID && xid != DDL_XID && xid > max_xid) {
+      max_xid = xid;
+    }
     if (log_type == LogType::END_CHECKPOINT) {
       auto end_checkpoint_log = std::dynamic_pointer_cast<EndCheckpointLog>(log_record);
       if (end_checkpoint_log) {
@@ -294,7 +298,6 @@ void LogManager::Analyze() {
         dpt_ = end_checkpoint_log->GetDPT();
       }
     } else if (log_type == LogType::BEGIN) {
-      // 从checkpoint后的日志恢复，可能有新的BEGIN事务
       if (att_.find(xid) == att_.end()) {
         att_[xid] = lsn;
       }
@@ -325,6 +328,10 @@ void LogManager::Analyze() {
       }
     }
     lsn += log_record->GetSize();
+  }
+  // 循环结束后，把 next_xid 推到大于日志中所有 xid
+  if (max_xid > 0) {
+    transaction_manager_.SetNextXid(max_xid + 1);
   }
 }
 

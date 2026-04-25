@@ -30,7 +30,9 @@ void TablePage::Init() {
 slotid_t TablePage::InsertRecord(std::shared_ptr<Record> record, xid_t xid, cid_t cid) {
   // 在记录头添加事务信息（xid 和 cid）
   // LAB 3 BEGIN
-
+  record->SetXmin(xid);
+  record->SetXmax(NULL_XID);
+  record->SetCid(cid);
   // 维护 lower 和 upper 指针
   // 设置 slots 数组
   // 将 record 写入 page data
@@ -59,7 +61,7 @@ void TablePage::DeleteRecord(slotid_t slot_id, xid_t xid) {
   db_size_t offset=slots_[slot_id].offset_;
   Record record;
   record.DeserializeHeaderFrom(page_data_ + offset);
-  record.SetDeleted(true);
+  record.SetXmax(xid);
   record.SerializeHeaderTo(page_data_ + offset);
   page_->SetDirty();
 }
@@ -90,7 +92,7 @@ void TablePage::UndoDeleteRecord(slotid_t slot_id) {
   db_size_t offset = slots_[slot_id].offset_;
   Record record;
   record.DeserializeHeaderFrom(page_data_ + offset);
-  record.SetDeleted(false);   // 清除删除标记
+  record.SetXmax(NULL_XID);
   record.SerializeHeaderTo(page_data_ + offset);
   page_->SetDirty();
 }

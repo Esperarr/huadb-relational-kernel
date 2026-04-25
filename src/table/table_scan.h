@@ -21,6 +21,8 @@ class TableScan {
                                         cid_t cid = NULL_CID, const std::unordered_set<xid_t> &active_xids = {});
 
  private:
+  bool IsVisible(const Record &record, xid_t xid, IsolationLevel isolation_level,
+                 cid_t cid, const std::unordered_set<xid_t> &active_xids) const;
   BufferPool &buffer_pool_;
   std::shared_ptr<Table> table_;
   Rid rid_;  // 当前扫描到的记录的 rid
