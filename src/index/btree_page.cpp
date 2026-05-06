@@ -51,7 +51,7 @@ db_size_t BTreePage::AddRecord(std::shared_ptr<IndexRecord> record, slotid_t slo
   // Step3. 插入记录，需要用memmove()将slots_数组整理好
   // LAB 6 BEGIN
 
-  // Step4. 返回插入记录的offset，别忘了page_->SetDirty();
+  // Step4. 返回插入记录的 slot_id，别忘了page_->SetDirty();
   // LAB 6 BEGIN
 }
 

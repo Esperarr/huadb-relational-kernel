@@ -67,6 +67,7 @@ void SQLLogicParser::Parse() {
       }
       ResultType result_type;
       std::string connection_name;
+      int timeout_seconds = 0;
       if (tokens[1] == "ok") {
         result_type = ResultType::SUCCESS;
       } else if (tokens[1] == "error") {
@@ -74,8 +75,18 @@ void SQLLogicParser::Parse() {
       } else {
         throw huadb::DbException(loc.ToString() + ": Unknown result type " + tokens[1]);
       }
-      if (tokens.size() > 2) {
-        connection_name = tokens[2];
+      // 支持的语法： statement ok|error [timeout N] [connection]
+      size_t idx = 2;
+      if (idx + 1 < tokens.size() && tokens[idx] == "timeout") {
+        try {
+          timeout_seconds = std::stoi(tokens[idx + 1]);
+        } catch (const std::exception &) {
+          throw huadb::DbException(loc.ToString() + ": invalid timeout value " + tokens[idx + 1]);
+        }
+        idx += 2;
+      }
+      if (idx < tokens.size()) {
+        connection_name = tokens[idx];
       }
       if (line_iter_ != lines_.cend()) {
         line_iter_++;
@@ -90,25 +101,43 @@ void SQLLogicParser::Parse() {
         sql += "\n";
         line_iter_++;
       }
-      records.emplace_back(
-          std::make_unique<StatementRecord>(loc, std::move(sql), result_type, std::move(connection_name)));
+      records.emplace_back(std::make_unique<StatementRecord>(loc, std::move(sql), result_type,
+                                                             std::move(connection_name), timeout_seconds));
       if (line_iter_ == lines_.end()) {
         break;
       }
     } else if (tokens[0] == "query") {
       auto sort_mode = SortMode::NO_SORT;
       std::string connection_name;
-      if (tokens.size() > 1) {
-        if (tokens[1] == "rowsort") {
+      int timeout_seconds = 0;
+      // 支持的语法： query [sort_mode] [timeout N] [connection]
+      // sort_mode ∈ {rowsort, nosort, keywords, count}
+      size_t idx = 1;
+      if (idx < tokens.size()) {
+        if (tokens[idx] == "rowsort") {
           sort_mode = SortMode::ROW_SORT;
-        } else if (tokens[1] == "nosort") {
+          ++idx;
+        } else if (tokens[idx] == "nosort") {
           sort_mode = SortMode::NO_SORT;
-        } else {
-          connection_name = tokens[1];
+          ++idx;
+        } else if (tokens[idx] == "keywords") {
+          sort_mode = SortMode::KEYWORDS;
+          ++idx;
+        } else if (tokens[idx] == "count") {
+          sort_mode = SortMode::COUNT;
+          ++idx;
         }
       }
-      if (tokens.size() > 2) {
-        connection_name = tokens[2];
+      if (idx + 1 < tokens.size() && tokens[idx] == "timeout") {
+        try {
+          timeout_seconds = std::stoi(tokens[idx + 1]);
+        } catch (const std::exception &) {
+          throw huadb::DbException(loc.ToString() + ": invalid timeout value " + tokens[idx + 1]);
+        }
+        idx += 2;
+      }
+      if (idx < tokens.size()) {
+        connection_name = tokens[idx];
       }
       line_iter_++;
       if (line_iter_ == lines_.cend()) {
@@ -142,11 +171,29 @@ void SQLLogicParser::Parse() {
         result += "\n";
         line_iter_++;
       }
-      records.emplace_back(
-          std::make_unique<QueryRecord>(loc, std::move(sql), sort_mode, std::move(connection_name), std::move(result)));
+      records.emplace_back(std::make_unique<QueryRecord>(loc, std::move(sql), sort_mode, std::move(connection_name),
+                                                         std::move(result), timeout_seconds));
       if (line_iter_ == lines_.end()) {
         break;
       }
+    } else if (tokens[0] == "verify") {
+      // 语法：verify btree <idx_name> height=<N>
+      if (tokens.size() != 4 || tokens[1] != "btree") {
+        throw huadb::DbException(loc.ToString() + ": expected `verify btree <idx_name> height=<N>`, got: " + line);
+      }
+      const std::string &idx_name = tokens[2];
+      const std::string &height_arg = tokens[3];
+      const std::string prefix = "height=";
+      if (height_arg.compare(0, prefix.size(), prefix) != 0) {
+        throw huadb::DbException(loc.ToString() + ": expected `height=<N>`, got: " + height_arg);
+      }
+      int expected_height = 0;
+      try {
+        expected_height = std::stoi(height_arg.substr(prefix.size()));
+      } catch (const std::exception &) {
+        throw huadb::DbException(loc.ToString() + ": invalid height value: " + height_arg);
+      }
+      records.emplace_back(std::make_unique<VerifyBtreeRecord>(loc, idx_name, expected_height));
     } else {
       throw huadb::DbException(loc.ToString() + ": Unknown command " + tokens[0]);
     }

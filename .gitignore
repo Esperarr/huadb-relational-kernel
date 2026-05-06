@@ -9,7 +9,6 @@ build
 huadb_data
 huadb_test
 tmp
-gen_test.py
+tmp/
 
-# history file
 .huadb_history

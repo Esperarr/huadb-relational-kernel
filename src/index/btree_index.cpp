@@ -32,7 +32,7 @@ void BTreeIndex::Build() {
     key_indices.emplace_back(table_schema.GetColumnIndex(column.GetName()));
   }
 
-  // Step2. 将table中的所有元组根据key排序
+  // Step2. 将table中的所有元组根据(key,heap_rid)从小到大排序
   // 取出堆表的所有元组，将其构造为索引元组，指向相应的堆表元组
   // 为降低难度，采用内存排序即可
   auto index_records = std::vector<std::shared_ptr<IndexRecord>>();
@@ -69,11 +69,21 @@ void BTreeIndex::BuildAdd(std::shared_ptr<BTreePageState> state, std::shared_ptr
       // LAB 6 BEGIN
     }
 
-    // Step1.2. 构造索引元组，key为当前页面最小的key，ptr指向当前页面
-    // internal page的ptr_.slot_id_字段没有用，设置为0即可
+    // Step1.2. 构造父节点索引元组：key 为当前页面 slot[0] 的扩展键 (values, heap_rid)，
+    // ptr 改指向当前页面。internal page 的 ptr_.slot_id_ 字段没有用，设置为 0 即可。
+    //
     // 要求:  key_{i-1}     key_i
     //       page_{i-1}    page_i
-    // page_{i-1}的最大值 <= key_i <= page_i的最小值(两边都可以取等号，e.g.考虑最极端的情况，所有key相等)
+    // 在 scheme C 下，扩展键 = (values, heap_rid)，heap_rid 作为隐式末位列让扩展键严格全序。
+    // 需要满足：
+    // (1) page_{i-1} 中所有记录的扩展键 < key_i 的扩展键
+    // (2) key_i 的扩展键 == page_i 中最小记录的扩展键（即 page_i slot[0] 的扩展键）
+    // 因扩展键严格唯一，不再有"两边可以取等号"的情形；每个子树的最小扩展键
+    // 就是该子树在父节点里对应 slot 的扩展键，路由无歧义。
+    //
+    // 实现上：直接复制当前页面 slot[0] 的 IndexRecord（values 和 heap_rid 都已就位），
+    // 只需把 ptr 改指向当前页即可——heap_rid 沿用 slot[0] 的值，这正是子树最小 heap_rid，
+    // 并随着层层上升，该不变式自然保持（上层 slot[0] 的 heap_rid 仍是整棵子树最小）。
     auto parent_index_record = state->GetPage()->GetRecord(0, *schema_);
     parent_index_record->SetPtr({state->page_id_, 0});
     // 递归调用BuildAdd()将索引元组加入到上层页面

@@ -10,7 +10,7 @@ namespace huadb {
 
 class Table {
  public:
-  Table(BufferPool &buffer_pool, LogManager &log_manager, oid_t oid, oid_t db_oid, ColumnList column_list,
+  Table(BufferPool &buffer_pool, LogManager &log_manager, Disk &disk, oid_t oid, oid_t db_oid, ColumnList column_list,
         bool new_table, bool is_empty);
 
   // 插入记录，返回插入记录的 rid
@@ -38,6 +38,8 @@ class Table {
   oid_t db_oid_;
   pageid_t first_page_id_;  // 第一个页面的页面号
   ColumnList column_list_;  // 表的 schema 信息
+  pageid_t last_page_id_;
+  Disk &disk_;
 };
 
 }  // namespace huadb

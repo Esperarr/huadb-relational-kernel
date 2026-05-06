@@ -24,6 +24,12 @@ class Value {
   bool IsNull() const;
   db_size_t GetSize() const;
   std::string ToString() const;
+  // Same as ToString() but renders CHAR/VARCHAR as a quoted SQL
+  // literal ('foo'). Used when embedding values into expressions
+  // printed by explain (Filter / Segment / Const), so the output is
+  // unambiguous for the reader. ToString() stays unquoted because
+  // sqllogictest result rows depend on the raw form.
+  std::string ToSqlLiteral() const;
   db_size_t SerializeTo(char *data) const;
   db_size_t DeserializeFrom(const char *data);
 

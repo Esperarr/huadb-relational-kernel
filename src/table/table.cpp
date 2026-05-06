@@ -1,20 +1,24 @@
 #include "table/table.h"
 
+#include "storage/disk.h"
 #include "table/table_page.h"
 
 namespace huadb {
 
-Table::Table(BufferPool &buffer_pool, LogManager &log_manager, oid_t oid, oid_t db_oid, ColumnList column_list,
-             bool new_table, bool is_empty)
+Table::Table(BufferPool &buffer_pool, LogManager &log_manager, Disk &disk, oid_t oid, oid_t db_oid,
+             ColumnList column_list, bool new_table, bool is_empty)
     : buffer_pool_(buffer_pool),
       log_manager_(log_manager),
+      disk_(disk),
       oid_(oid),
       db_oid_(db_oid),
       column_list_(std::move(column_list)) {
   if (new_table || is_empty) {
     first_page_id_ = NULL_PAGE_ID;
+    last_page_id_ = NULL_PAGE_ID;
   } else {
     first_page_id_ = 0;
+    last_page_id_ = disk_.GetPageCount(disk_.GetFilePath(db_oid, oid)) - 1;
   }
 }
 

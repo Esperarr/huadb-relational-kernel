@@ -13,7 +13,7 @@ class Const : public OperatorExpression {
   Value EvaluateJoin(std::shared_ptr<const Record> left, std::shared_ptr<const Record> right) override {
     return value_;
   }
-  std::string ToString() const override { return value_.ToString(); }
+  std::string ToString() const override { return value_.ToSqlLiteral(); }
   Value value_;
 };
 

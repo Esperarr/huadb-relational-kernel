@@ -40,7 +40,12 @@ class Comparison : public OperatorExpression {
     Value rhs = children_[1]->EvaluateJoin(left, right);
     return Compute(lhs, rhs);
   }
-  std::string ToString() const override { return fmt::format("{} {} {}", children_[0], type_, children_[1]); }
+  int Precedence() const override { return 4; }
+  std::string ToString() const override {
+    int my_prec = Precedence();
+    return fmt::format("{} {} {}", children_[0]->ToStringWithParens(my_prec), type_,
+                       children_[1]->ToStringWithParens(my_prec));
+  }
   ComparisonType GetComparisonType() { return type_; }
 
  private:

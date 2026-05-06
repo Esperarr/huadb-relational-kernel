@@ -98,7 +98,7 @@ void SimpleCatalog::CreateTable(const std::string &table_name, const ColumnList 
     Disk::CreateFile(Disk::GetFilePath(db_oid, oid));
   }
   name2oid_[table_name] = oid;
-  oid2table_[oid] = std::make_shared<Table>(buffer_pool_, log_manager_, oid, db_oid, column_list, new_table,
+  oid2table_[oid] = std::make_shared<Table>(buffer_pool_, log_manager_, disk_, oid, db_oid, column_list, new_table,
                                             Disk::EmptyFile(Disk::GetFilePath(db_oid, oid)));
 
   // 检查：非新表不需要添加到Meta中
@@ -157,12 +157,18 @@ std::shared_ptr<Table> SimpleCatalog::GetTable(oid_t oid) const {
   return oid2table_.at(oid);
 }
 
+std::set<std::shared_ptr<Index>> SimpleCatalog::GetTableIndex(oid_t table_oid) const {
+  throw DbException("GetTableIndex not implemented in SimpleCatalog");
+}
+
 oid_t SimpleCatalog::GetTableOid(const std::string &table_name) const {
   if (!oid_manager_.EntryExists(OidType::TABLE, table_name)) {
     throw DbException("Table \"" + table_name + "\" does not exist");
   }
   return oid_manager_.GetEntryOid(OidType::TABLE, table_name);
 }
+
+std::shared_ptr<Index> SimpleCatalog::GetIndex(const std::string &index_name) const { return nullptr; }
 
 const ColumnList &SimpleCatalog::GetTableColumnList(oid_t oid) const { return GetTable(oid)->GetColumnList(); }
 

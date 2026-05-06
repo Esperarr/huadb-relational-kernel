@@ -69,6 +69,16 @@ std::string Value::ToString() const {
   }
 }
 
+std::string Value::ToSqlLiteral() const {
+  if (type_ == Type::CHAR || type_ == Type::VARCHAR) {
+    if (is_null_) {
+      return "NULL";
+    }
+    return "'" + str_ + "'";
+  }
+  return ToString();
+}
+
 db_size_t Value::SerializeTo(char *data) const {
   auto result = size_;
   switch (type_) {

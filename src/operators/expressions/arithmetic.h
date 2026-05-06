@@ -25,7 +25,22 @@ class Arithmetic : public OperatorExpression {
     return Compute(lhs, rhs);
   }
 
-  std::string ToString() const override { return fmt::format("{} {} {}", children_[0], type_, children_[1]); }
+  int Precedence() const override {
+    switch (type_) {
+      case ArithmeticType::ADD:
+      case ArithmeticType::SUB:
+        return 5;
+      case ArithmeticType::MUL:
+      case ArithmeticType::DIV:
+        return 6;
+    }
+    return 100;
+  }
+  std::string ToString() const override {
+    int my_prec = Precedence();
+    return fmt::format("{} {} {}", children_[0]->ToStringWithParens(my_prec), type_,
+                       children_[1]->ToStringWithParens(my_prec));
+  }
 
  private:
   ArithmeticType type_;

@@ -1,0 +1,12 @@
+# 形态：1 个空 LEAF 即 root；树高 = 1
+
+statement ok
+create table t1(a int);
+
+statement ok
+create index i1 on t1(a);
+
+verify btree i1 height=1
+
+statement ok
+drop table t1;

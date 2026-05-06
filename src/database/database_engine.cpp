@@ -11,6 +11,7 @@
 #include "database/connection.h"
 #include "executors/executor_context.h"
 #include "executors/executor_factory.h"
+#include "index/btree_index.h"
 #include "operators/expressions/column_value.h"
 #include "postgres_parser.hpp"
 #include "table/record.h"
@@ -249,7 +250,7 @@ void DatabaseEngine::ExecuteSql(const std::string &sql, ResultWriter &writer, co
 
             if (enable_optimizer_) {
               // 查询计划优化
-              Optimizer optimizer(*catalog_, join_order_algorithm_, enable_projection_pushdown_);
+              Optimizer optimizer(*catalog_, join_order_algorithm_, enable_projection_pushdown_, force_join_);
               plan = optimizer.Optimize(plan);
             }
 
@@ -504,7 +505,7 @@ void DatabaseEngine::Explain(const ExplainStatement &stmt, ResultWriter &writer)
   }
 
   if (enable_optimizer_) {
-    Optimizer optimizer(*catalog_, join_order_algorithm_, enable_projection_pushdown_);
+    Optimizer optimizer(*catalog_, join_order_algorithm_, enable_projection_pushdown_, force_join_);
     plan = optimizer.Optimize(plan);
   }
 
@@ -547,6 +548,31 @@ void DatabaseEngine::VariableShow(const Connection &connection, const VariableSh
     result = std::to_string(disk_->GetAccessCount());
   } else if (stmt.variable_ == "redo_count") {
     result = std::to_string(log_manager_->GetRedoCount());
+  } else if (auto index = catalog_->GetIndex(stmt.variable_)) {
+    // SHOW <idx_name>: 用于 lab6 评测/调试。把 BTreeIndex::Print() 输出的多行字符串
+    // 拆成多行结果（每行一行 cell），既便于人工肉眼读，又便于 verify btree 测试驱动
+    // 按行解析。非 BTree 索引（目前不存在）不支持。
+    auto btree = std::dynamic_pointer_cast<BTreeIndex>(index);
+    if (!btree) {
+      throw DbException("SHOW " + stmt.variable_ + ": only BTreeIndex is supported");
+    }
+    auto dump = btree->Print();
+    writer.BeginTable();
+    writer.BeginHeader();
+    writer.WriteHeaderCell(stmt.variable_);
+    writer.EndHeader();
+    size_t row_count = 0;
+    auto lines = StringUtil::Split(dump, '\n');
+    for (const auto &line : lines) {
+      if (line.empty()) continue;
+      writer.BeginRow();
+      writer.WriteCell(line);
+      writer.EndRow();
+      ++row_count;
+    }
+    writer.EndTable();
+    writer.WriteRowCount(row_count);
+    return;
   } else {
     if (client_variables_.find(&connection) == client_variables_.end() ||
         client_variables_.at(&connection).find(stmt.variable_) == client_variables_.at(&connection).end()) {

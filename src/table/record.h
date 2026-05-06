@@ -63,22 +63,31 @@ class Record {
 };
 
 /*
- * 索引元组，由键值和指针两部分组成，前者是索引项存储的key，后者是索引指向的元组位置
- * 对b+树，中间节点页面的索引元组ptr_指向下层页面的相应索引元组；叶子节点的ptr_指向堆表元组
+ * 索引元组，由键值、指针、heap_rid 三部分组成
+ *   - values_: 索引项存储的 key（用户列）
+ *   - ptr_:    指向下一层位置——内部节点指向下层页面，叶子节点指向堆表元组
+ *   - heap_rid_: 比较键的隐式末位列；叶子节点为该叶子记录指向的堆表行 rid，
+ *                内部节点为其子树最左叶子记录的 heap_rid（在构建时由下层向上传播）
+ *                作用：让 B+ 树以 (values_, heap_rid_) 为严格有序的扩展键，
+ *                      消除重复键导致的内部节点路由歧义
  */
 class IndexRecord : public Record {
  public:
   IndexRecord() = default;
-  IndexRecord(std::vector<Value> values, Rid ptr = {0, 0}) : Record(values), ptr_(ptr) {}
+  IndexRecord(std::vector<Value> values, Rid ptr = {0, 0}, Rid heap_rid = {0, 0})
+      : Record(values), ptr_(ptr), heap_rid_(heap_rid) {}
   db_size_t GetSize() const;
   db_size_t SerializeTo(char *data) const;
   db_size_t DeserializeFrom(const char *data, const ColumnList &column_list);
   Rid GetPtr() const;
   void SetPtr(Rid ptr);
+  Rid GetHeapRid() const;
+  void SetHeapRid(Rid heap_rid);
   std::string ToString();
 
  private:
   Rid ptr_;
+  Rid heap_rid_;
 };
 
 }  // namespace huadb

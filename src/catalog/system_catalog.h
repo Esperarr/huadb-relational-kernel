@@ -56,6 +56,8 @@ class SystemCatalog {
   std::shared_ptr<Table> GetTable(oid_t oid) const;
   // 获取索引
   std::set<std::shared_ptr<Index>> GetTableIndex(oid_t table_oid) const;
+  // 按名字查找索引；不存在返回 nullptr。供 SHOW <idx_name> 等评测/调试通道使用
+  std::shared_ptr<Index> GetIndex(const std::string &index_name) const;
   // 获取表oid
   oid_t GetTableOid(const std::string &table_name) const;
   // 获取表的schema信息

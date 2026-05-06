@@ -1,0 +1,29 @@
+statement ok
+create table t1(a int, b int, c int, d int, e varchar(8), f varchar(8), g varchar(8), h varchar(8));
+
+statement ok
+insert into t1 values (6, 1, 1, 1, 'e0001', 'f0001', 'g0001', 'h0001'), (7, 2, 2, 2, 'e0002', 'f0002', 'g0002', 'h0002'), (8, 3, 3, 3, 'e0003', 'f0003', 'g0003', 'h0003'), (9, 4, 4, 4, 'e0004', 'f0004', 'g0004', 'h0004'), (10, 5, 5, 5, 'e0005', 'f0005', 'g0005', 'h0005'), (11, 6, 6, 6, 'e0006', 'f0006', 'g0006', 'h0006'), (12, 7, 7, 7, 'e0007', 'f0007', 'g0007', 'h0007'), (13, 8, 8, 8, 'e0008', 'f0008', 'g0008', 'h0008'), (14, 9, 9, 9, 'e0009', 'f0009', 'g0009', 'h0009'), (15, 10, 10, 10, 'e0010', 'f0010', 'g0010', 'h0010');
+
+statement ok
+create index i1 on t1(d);
+
+query keywords
+explain (optimizer) select * from t1 where d <= 50 and a > 10;
+----
+BTreeScan: t1 1
+SeqScan: t1 0
+RidUnion 0
+Filter 1
+
+query rowsort
+select * from t1 where d <= 50 and a > 10;
+----
+11 6 6 6 e0006 f0006 g0006 h0006
+12 7 7 7 e0007 f0007 g0007 h0007
+13 8 8 8 e0008 f0008 g0008 h0008
+14 9 9 9 e0009 f0009 g0009 h0009
+15 10 10 10 e0010 f0010 g0010 h0010
+
+
+statement ok
+drop table t1;
