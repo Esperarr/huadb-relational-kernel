@@ -13,6 +13,8 @@ class LimitExecutor : public Executor {
 
  private:
   std::shared_ptr<const LimitOperator> plan_;
+  bool offset_skipped_ = false;  // 是否已完成首次 offset 跳过
+  uint32_t count_ = 0;           // 已经向上层返回的记录数
 };
 
 }  // namespace huadb

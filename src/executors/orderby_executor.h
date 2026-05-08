@@ -14,6 +14,9 @@ class OrderByExecutor : public Executor {
 
  private:
   std::shared_ptr<const OrderByOperator> plan_;
+  bool sorted_ = false; // 是否已完成读取与排序
+  size_t idx_ = 0; // 已输出的记录数
+  std::vector<std::shared_ptr<Record>> records_; // 排序后的全部记录
 };
 
 }  // namespace huadb
