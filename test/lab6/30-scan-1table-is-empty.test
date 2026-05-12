@@ -1,0 +1,22 @@
+statement ok
+create table t1(a int, b int, c int, d int, e varchar(8), f varchar(8), g varchar(8), h varchar(8));
+
+statement ok
+create index i1 on t1(c);
+
+query keywords
+explain (optimizer) select * from t1 where c >= 50;
+----
+BTreeScan: t1 1
+SeqScan: t1 0
+RidUnion 0
+Filter 0
+
+query count
+select * from t1 where c >= 50;
+----
+0
+
+
+statement ok
+drop table t1;

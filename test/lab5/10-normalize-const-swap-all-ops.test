@@ -1,0 +1,35 @@
+statement ok
+create table t1(a int);
+
+query
+insert into t1 values (1), (2), (3), (4), (5), (6), (7);
+----
+7
+
+query keywords
+explain (optimizer) select a from t1 where 5 = a and 5 != a and 5 < a and 5 <= a and 5 > a and 5 >= a;
+----
+not            -
+NOT            -
+SeqScan: t1    1
+Filter         6
+t1.a = 5       +
+t1.a != 5      +
+t1.a > 5       +
+t1.a >= 5      +
+t1.a < 5       +
+t1.a <= 5      +
+5 = t1         -
+5 != t1        -
+5 < t1         -
+5 <= t1        -
+5 > t1         -
+5 >= t1        -
+
+
+query rowsort
+select a from t1 where 5 = a and 5 != a and 5 < a and 5 <= a and 5 > a and 5 >= a;
+----
+
+statement ok
+drop table t1;

@@ -22,9 +22,15 @@ pageid_t BTreeLeafPage::GetPrevPageId() const { return GetSpecialData()->prev_pa
 
 pageid_t BTreeLeafPage::GetNextPageId() const { return GetSpecialData()->next_page_id_; }
 
-void BTreeLeafPage::SetPrevPageId(pageid_t prev_page_id) { GetSpecialData()->prev_page_id_ = prev_page_id; }
+void BTreeLeafPage::SetPrevPageId(pageid_t prev_page_id) {
+  GetSpecialData()->prev_page_id_ = prev_page_id;
+  page_->SetDirty();
+}
 
-void BTreeLeafPage::SetNextPageId(pageid_t next_page_id) { GetSpecialData()->next_page_id_ = next_page_id; }
+void BTreeLeafPage::SetNextPageId(pageid_t next_page_id) {
+  GetSpecialData()->next_page_id_ = next_page_id;
+  page_->SetDirty();
+}
 
 BTreeLeafPageData *BTreeLeafPage::GetSpecialData() const {
   return reinterpret_cast<BTreeLeafPageData *>(BTreePage::GetSpecialData());

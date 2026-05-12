@@ -201,7 +201,7 @@ void SystemCatalog::CreateTable(const std::string &table_name, const ColumnList 
   if (new_table) {
     Disk::CreateFile(Disk::GetFilePath(db_oid, oid));
   }
-  oid2table_[oid] = std::make_shared<Table>(buffer_pool_, log_manager_, oid, db_oid, column_list, new_table,
+  oid2table_[oid] = std::make_shared<Table>(buffer_pool_, log_manager_, disk_, oid, db_oid, column_list, new_table,
                                             Disk::EmptyFile(Disk::GetFilePath(db_oid, oid)));
 
   // 检查：非新表不需要添加到 Meta 中
@@ -411,6 +411,18 @@ std::set<std::shared_ptr<Index>> SystemCatalog::GetTableIndex(oid_t table_oid) c
   return table2indexes_.at(table_oid);
 }
 
+std::shared_ptr<Index> SystemCatalog::GetIndex(const std::string &index_name) const {
+  if (!oid_manager_.EntryExists(OidType::INDEX, index_name)) {
+    return nullptr;
+  }
+  oid_t index_oid = oid_manager_.GetEntryOid(OidType::INDEX, index_name);
+  auto it = oid2index_.find(index_oid);
+  if (it == oid2index_.end()) {
+    return nullptr;
+  }
+  return it->second;
+}
+
 oid_t SystemCatalog::GetTableOid(const std::string &table_name) const {
   if (!oid_manager_.EntryExists(OidType::TABLE, table_name)) {
     throw DbException("Table \"" + table_name + "\" does not exist");
@@ -569,8 +581,9 @@ void SystemCatalog::LoadTableMeta() {
 
       // 添加数据表
       oid_manager_.SetEntryOid(OidType::TABLE, table_name, oid);
-      oid2table_[oid] = std::make_shared<Table>(buffer_pool_, log_manager_, oid, current_database_oid_, column_list,
-                                                false, Disk::EmptyFile(Disk::GetFilePath(GetDatabaseOid(oid), oid)));
+      oid2table_[oid] =
+          std::make_shared<Table>(buffer_pool_, log_manager_, disk_, oid, current_database_oid_, column_list, false,
+                                  Disk::EmptyFile(Disk::GetFilePath(GetDatabaseOid(oid), oid)));
       table2cardinality_[table_name] = cardinality;
     }
   }

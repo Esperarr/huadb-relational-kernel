@@ -1,0 +1,31 @@
+statement ok
+create table t1(a int, b int, c int, d int, e int, f int);
+
+query
+insert into t1 values (1, 1, 1, 1, 1, 1), (3, 3, 3, 3, 3, 3), (5, 5, 5, 5, 5, 5);
+----
+3
+
+query keywords
+explain (optimizer) select * from t1
+where not (a = 1) and not (b < 2) and not (c > 5) and not (d <= 1) and not (e >= 5) and not (f != 3);
+----
+not            -
+NOT            -
+SeqScan: t1    1
+Filter         6
+t1.a != 1      +
+t1.b >= 2      +
+t1.c <= 5      +
+t1.d > 1       +
+t1.e < 5       +
+t1.f = 3       +
+
+query rowsort
+select * from t1
+where not (a = 1) and not (b < 2) and not (c > 5) and not (d <= 1) and not (e >= 5) and not (f != 3);
+----
+3 3 3 3 3 3
+
+statement ok
+drop table t1;

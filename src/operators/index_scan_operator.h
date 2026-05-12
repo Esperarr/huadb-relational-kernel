@@ -34,6 +34,7 @@ class IndexScanOperator : public Operator {
     }
   }
   const std::string &GetTableName() const { return table_name_; }
+  const std::optional<std::string> &GetAlias() const { return alias_; }
   bool HasLock() const { return has_lock_; }
 
  protected:

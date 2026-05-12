@@ -51,6 +51,9 @@ class SimpleCatalog {
   std::vector<std::string> GetTableNames() const;
   // 获取表
   std::shared_ptr<Table> GetTable(oid_t oid) const;
+  std::set<std::shared_ptr<Index>> GetTableIndex(oid_t table_oid) const;
+  // 按名字查找索引；SimpleCatalog 不支持索引，恒返回 nullptr。仅为与 SystemCatalog 接口对齐
+  std::shared_ptr<Index> GetIndex(const std::string &index_name) const;
   // 获取表oid
   oid_t GetTableOid(const std::string &table_name) const;
   // 获取表的schema信息

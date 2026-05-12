@@ -41,11 +41,24 @@ class Logic : public OperatorExpression {
     }
   }
 
-  std::string ToString() const override {
-    if (logic_type_ == LogicType::NOT) {
-      return fmt::format("{} {}", logic_type_, children_[0]);
+  int Precedence() const override {
+    switch (logic_type_) {
+      case LogicType::OR:
+        return 1;
+      case LogicType::AND:
+        return 2;
+      case LogicType::NOT:
+        return 3;
     }
-    return fmt::format("{} {} {}", children_[0], logic_type_, children_[1]);
+    return 100;
+  }
+  std::string ToString() const override {
+    int my_prec = Precedence();
+    if (logic_type_ == LogicType::NOT) {
+      return fmt::format("{} {}", logic_type_, children_[0]->ToStringWithParens(my_prec));
+    }
+    return fmt::format("{} {} {}", children_[0]->ToStringWithParens(my_prec), logic_type_,
+                       children_[1]->ToStringWithParens(my_prec));
   }
   LogicType GetLogicType() const { return logic_type_; }
 

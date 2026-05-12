@@ -39,6 +39,22 @@ class OperatorExpression {
     throw DbException("EvaluateJoin method not implemented");
   }
   virtual std::string ToString() const { return "OperatorExpression"; }
+  // Operator precedence used to decide whether parens are needed when
+  // this expression appears as a child of another operator. Default
+  // for non-operator expressions (column refs, constants, …) is the
+  // maximum so they never get wrapped. Logic / Comparison / Arithmetic
+  // override with their own precedence levels. Convention follows SQL
+  // standard: `not` is weaker than comparison but stronger than
+  // `and` / `or`.
+  virtual int Precedence() const { return 100; }
+  // Render this expression, surrounding it with parens iff its top
+  // operator binds less tightly than the parent's.
+  std::string ToStringWithParens(int parent_prec) const {
+    if (Precedence() < parent_prec) {
+      return "(" + ToString() + ")";
+    }
+    return ToString();
+  }
 
   OperatorExpressionType GetExprType() const { return expr_type_; }
   Type GetValueType() const { return value_type_; }

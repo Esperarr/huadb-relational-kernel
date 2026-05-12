@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+
 #include "index/btree_internal_page.h"
 #include "index/btree_leaf_page.h"
 #include "index/btree_page.h"
@@ -8,6 +10,18 @@
 #include "storage/buffer_pool.h"
 
 namespace huadb {
+
+// 扩展键 (values_, heap_rid_) 中作为隐式末位列的两枚预置探针 rid。
+// 当调用方只持有 user key、需要凑成完整扩展键参与比较时，可选用其中之一
+// 作为探针的 heap_rid 部分：
+//   MIN_RID = {0, 0}：作为探针时表现为"落在所有并列 key 段的最左侧"。
+//   MAX_RID = {NULL_PAGE_ID, UINT16_MAX}：严格大于任何真实 heap_rid（NULL_PAGE_ID 为保留页号），总是落在所有并列 key
+//   段的右端之后。
+inline constexpr Rid MIN_RID{0, 0};
+inline constexpr Rid MAX_RID{NULL_PAGE_ID, std::numeric_limits<slotid_t>::max()};
+
+// 你可以实现一些辅助函数
+// LAB 6 BEGIN
 
 class BTreePageState {
  public:
@@ -30,6 +44,7 @@ class BTreePageState {
 };
 
 // B+ 树的索引扫描区间
+// 端点用 user-key 的"约束前缀"表示——只持有被实际约束的前缀列，未约束的尾列不出现。
 class Segment {
  public:
   std::vector<Value> left_val_;
@@ -53,6 +68,17 @@ class BTreeIndex : public Index {
   void Build();
   // 导出b+树(子树)的.dot文件，可用GraphViz可视化，已经实现好，无需修改
   void Draw(std::string out_path = std::string("./tmp.dot"), pageid_t page_id = 0) override;
+  // 把当前 B+ 树的所有页面（meta / internal / leaf）以及堆表里所有行的 (rid, indexed_col_values)
+  // 序列化为多行字符串，每行一个节点。供 SHOW <idx_name> 与 verify btree 测试指令使用。
+  // 输出格式（每行第一个 token 即类型标签）：
+  //   META root=<id|NULL>
+  //   LEAF page=<id> prev=<id|NULL> next=<id|NULL> slots=<n> | <slot_0> | ... | <slot_{n-1}>
+  //   INTERNAL page=<id> slots=<n> | <slot_0> | ... | <slot_{n-1}>
+  //   HEAP rid=(<p>,<s>) values=(<v1>,<v2>,...)
+  // 其中每个 slot 序列化为：values=(v1,v2,...);heap_rid=(p,s);ptr=(p,s)
+  // 注：本函数为评测基础设施。grade 时会用测试仓库中的 canonical 实现覆盖学生提交的版本，
+  //     学生不要修改这个文件 (btree_print.cpp)。
+  std::string Print();
 
  private:
   void BuildAdd(std::shared_ptr<BTreePageState> state, std::shared_ptr<IndexRecord> index_record);

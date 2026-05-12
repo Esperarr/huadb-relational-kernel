@@ -6,6 +6,10 @@ add_library(
   optimizer
   OBJECT
   optimizer.cpp
+  normalize_predicates.cpp
+  push_down_predicates.cpp
+  seq_to_index.cpp
+  join_reorder.cpp
 )
 
 set(ALL_OBJECT_FILES

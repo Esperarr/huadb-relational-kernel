@@ -14,7 +14,7 @@ class BTreeLeafPageData {
 
 class BTreeLeafPage : public BTreePage {
  public:
-  explicit BTreeLeafPage(std::shared_ptr<Page> page, pageid_t page_id) : BTreePage(page, page_id){};
+  explicit BTreeLeafPage(std::shared_ptr<Page> page, pageid_t page_id) : BTreePage(page, page_id) {};
   void Init();
   void Insert(std::shared_ptr<Record> record);
   void Delete();

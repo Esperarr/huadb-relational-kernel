@@ -13,27 +13,30 @@ enum class BTreePageType : uint8_t { INTERNAL = 0, LEAF = 1, META = 2 };
 static constexpr db_size_t BTREE_PAGE_HEADER_SIZE = sizeof(lsn_t) + sizeof(BTreePageType) + sizeof(pageid_t);
 
 /* B+树页面形式
- * +-------------+----------+----------+--------------------------+
+ * +-------------+----------+----------+------------+-------------+
  * |  page_lsn_  |  lower_  |  upper_  |  special_  |  page_type  |
- * +-------------+----------+----------+--------------------------+
- * |  slot[0]...slots[n]  |                                       |
- * +-------------+------------------------------------------------+
- *               ^ lower_ -->
+ * +-------------+----------+-------+--+------------+-------------+
+ * |  slot[0]...slot[n-1],slots[n]  |         free space          |
+ * +--------------------------------+-----------------------------+
+ *                                  ^
+ *                                lower_ -->
  *
- *                   <-- v upper_
- * +--------------------------------------------------------------+
- * |                     |  index_record n,index_record n-1...    |
+ *                 <-- upper_
+ *                       v
+ * +---------------------+----------------------------------------+
+ * |     free space      |  index_record n,index_record n-1...    |
  * +---------------------+----------------------------------------+
  *
- *                       v special_ -->
+ *                    special_ -->
+ *                       v
  * +---------------------+----------------------------------------+
  * |  ...index_record 0  |  space remained for subclass           |
  * +---------------------+----------------------------------------+
- * 其中，page_lsn_,lower_,upper_,slots_,page_type_是所有b+树页面都具有的，因此放在最前面
- * space remained for subclass是为继承BtreePage的子类预留的空间
- * 可以通过sizeof(子类)-sizeof(父类)得到
+ * 其中，page_lsn_,lower_,upper_,special_,page_type_是所有b+树页面共有的固定 header 的，因此放在最前面，其后紧跟槽位数组
+ * slots_[]，从 lower_ 开始向后增长 space remained for subclass (从special_指针开始往后)
+ * 是为继承BtreePage的子类预留的空间 可以通过sizeof(子类)-sizeof(父类)得到
  * 例如BTreeLeafPage还需要存储指向下一页的指针，而BTreeInternalPage不需要
- * BTreeMetaPage需要存储root_page_id_，但不需要存储任何元组，因此lower_和upper_均指向page_type_的后一个字节
+ * BTreeMetaPage需要存储root_page_id_，但不需要存储任何元组，因此lower_，upper_，special_均指向page_type_的后一个字节
  * 参考: postgresql-16.0/src/include/storage/bufpage.h
  */
 

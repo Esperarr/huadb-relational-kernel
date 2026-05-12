@@ -132,24 +132,31 @@ void Record::UpdateSize() {
   }
 }
 
-db_size_t IndexRecord::GetSize() const { return sizeof(Rid) + Record::GetSize(); }
+db_size_t IndexRecord::GetSize() const { return 2 * sizeof(Rid) + Record::GetSize(); }
 
 db_size_t IndexRecord::SerializeTo(char *data) const {
   *reinterpret_cast<Rid *>(data) = ptr_;
-  return sizeof(ptr_) + Record::SerializeTo(data + sizeof(Rid));
+  *reinterpret_cast<Rid *>(data + sizeof(Rid)) = heap_rid_;
+  return 2 * sizeof(Rid) + Record::SerializeTo(data + 2 * sizeof(Rid));
 }
 
 db_size_t IndexRecord::DeserializeFrom(const char *data, const ColumnList &column_list) {
   ptr_ = *reinterpret_cast<const Rid *>(data);
-  return sizeof(ptr_) + Record::DeserializeFrom(data + sizeof(ptr_), column_list);
+  heap_rid_ = *reinterpret_cast<const Rid *>(data + sizeof(Rid));
+  return 2 * sizeof(Rid) + Record::DeserializeFrom(data + 2 * sizeof(Rid), column_list);
 }
 
 Rid IndexRecord::GetPtr() const { return ptr_; }
 
 void IndexRecord::SetPtr(Rid ptr) { ptr_ = ptr; }
 
+Rid IndexRecord::GetHeapRid() const { return heap_rid_; }
+
+void IndexRecord::SetHeapRid(Rid heap_rid) { heap_rid_ = heap_rid; }
+
 std::string IndexRecord::ToString() {
-  return Record::ToString() + " -> (" + std::to_string(ptr_.page_id_) + "," + std::to_string(ptr_.slot_id_) + ")";
+  return Record::ToString() + " -> (" + std::to_string(ptr_.page_id_) + "," + std::to_string(ptr_.slot_id_) + ")" +
+         " heap_rid=(" + std::to_string(heap_rid_.page_id_) + "," + std::to_string(heap_rid_.slot_id_) + ")";
 }
 
 }  // namespace huadb

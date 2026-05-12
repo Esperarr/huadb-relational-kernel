@@ -6,6 +6,7 @@ add_library(
   btree_leaf_page.cpp
 	btree_meta_page.cpp
   btree_page.cpp
+  btree_print.cpp
   index.cpp
 )
 
