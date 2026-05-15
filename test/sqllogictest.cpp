@@ -27,7 +27,7 @@
 static constexpr const char *TEST_DIRECTORY = "huadb_test";
 static constexpr int DEFAULT_TIMEOUT_SECONDS = 30;
 
-static std::vector<std::string> labs_disable_verbose_feedback = {"lab6"};
+static std::vector<std::string> labs_disable_verbose_feedback = {};
 
 static bool IsVerboseDisabled(const fs::path &path) {
   auto path_str = path.string();
