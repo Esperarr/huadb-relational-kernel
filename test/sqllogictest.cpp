@@ -1,3 +1,6 @@
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -22,6 +25,22 @@
 #include "btree/verifier.h"
 
 static constexpr const char *TEST_DIRECTORY = "huadb_test";
+static constexpr int DEFAULT_TIMEOUT_SECONDS = 30;
+
+static std::vector<std::string> labs_disable_verbose_feedback = {"lab6"};
+
+static bool IsVerboseDisabled(const fs::path &path) {
+  auto path_str = path.string();
+  if (path_str.find("[hidden]") == std::string::npos) {
+    return false;
+  }
+  for (const auto &lab : labs_disable_verbose_feedback) {
+    if (path_str.find(lab) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
 
 std::unordered_map<std::string, std::unique_ptr<huadb::Connection>> connections;
 
@@ -209,6 +228,19 @@ bool Run(const fs::path &path) {
     exit(1);
   }
   parser.Parse();
+
+  if (path.string().find("[hidden]") != std::string::npos) {
+    for (auto &record : parser.records) {
+      auto &file = record->loc_.file_;
+      auto h = file.find("[hidden]");
+      if (h != std::string::npos) {
+        auto dot = file.rfind('.');
+        std::string ext = (dot != std::string::npos) ? file.substr(dot) : "";
+        file = file.substr(0, h) + file.substr(h + 8, 2) + "-[hidden]" + ext;
+      }
+    }
+  }
+
   connections.clear();
   auto database = std::make_unique<huadb::DatabaseEngine>();
 
@@ -258,25 +290,22 @@ bool Run(const fs::path &path) {
           cv.notify_all();
         });
 
+        int timeout = statement.timeout_seconds_ > 0 ? statement.timeout_seconds_ : DEFAULT_TIMEOUT_SECONDS;
         bool timed_out = false;
-        if (statement.timeout_seconds_ > 0) {
+        {
           std::unique_lock<std::mutex> lk(mu);
-          if (!cv.wait_for(lk, std::chrono::seconds(statement.timeout_seconds_), [&]() { return finished; })) {
+          if (!cv.wait_for(lk, std::chrono::seconds(timeout), [&]() { return finished; })) {
             timed_out = true;
           }
-        } else {
-          std::unique_lock<std::mutex> lk(mu);
-          cv.wait(lk, [&]() { return finished; });
         }
 
         if (timed_out) {
           // 同 QUERY 路径：worker 仍持有 Connection / DatabaseEngine 引用，
           // 直接销毁会 UAF，改为退出进程由评测器视为失败。
-          std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                    << huadb::RESET << record->loc_ << "\nStatement timed out after " << statement.timeout_seconds_
-                    << " seconds" << std::endl;
+          std::cerr << record->loc_ << "\nStatement timed out after "
+                    << timeout << " seconds" << std::endl;
           worker.detach();
-          std::exit(1);
+          _exit(1);
         }
         worker.join();
 
@@ -285,15 +314,13 @@ bool Run(const fs::path &path) {
             std::rethrow_exception(exc);
           } catch (huadb::DbException &e) {
             if (statement.expected_result_ == ResultType::SUCCESS) {
-              std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                        << huadb::RESET << record->loc_ << "\nUnexpected error: " << e.what() << std::endl;
+              std::cerr << record->loc_ << "\nUnexpected error: " << e.what() << std::endl;
               return false;
             }
           }
         } else {
           if (statement.expected_result_ == ResultType::ERROR) {
-            std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                      << huadb::RESET << record->loc_ << "\nUnexpected success" << std::endl;
+            std::cerr << record->loc_ << "\nUnexpected success" << std::endl;
             return false;
           }
         }
@@ -327,26 +354,23 @@ bool Run(const fs::path &path) {
           cv.notify_all();
         });
 
+        int timeout = query.timeout_seconds_ > 0 ? query.timeout_seconds_ : DEFAULT_TIMEOUT_SECONDS;
         bool timed_out = false;
-        if (query.timeout_seconds_ > 0) {
+        {
           std::unique_lock<std::mutex> lk(mu);
-          if (!cv.wait_for(lk, std::chrono::seconds(query.timeout_seconds_), [&]() { return finished; })) {
+          if (!cv.wait_for(lk, std::chrono::seconds(timeout), [&]() { return finished; })) {
             timed_out = true;
           }
-        } else {
-          std::unique_lock<std::mutex> lk(mu);
-          cv.wait(lk, [&]() { return finished; });
         }
 
         if (timed_out) {
           // 子线程仍在跑，且持有 Connection / DatabaseEngine 的引用；
           // 此时直接销毁局部状态会造成 UAF，故直接退出进程，
           // 由评测器以 "测试超时" 认定失败即可。
-          std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                    << huadb::RESET << record->loc_ << "\nQuery timed out after " << query.timeout_seconds_
-                    << " seconds" << std::endl;
+          std::cerr << record->loc_ << "\nQuery timed out after "
+                    << timeout << " seconds" << std::endl;
           worker.detach();
-          std::exit(1);
+          _exit(1);
         }
         worker.join();
 
@@ -354,17 +378,14 @@ bool Run(const fs::path &path) {
           try {
             std::rethrow_exception(exc);
           } catch (huadb::DbException &e) {
-            std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                      << huadb::RESET << record->loc_ << "\nUnexpected error: " << e.what() << std::endl;
+            std::cerr << record->loc_ << "\nUnexpected error: " << e.what() << std::endl;
             return false;
           }
         }
 
         std::ostringstream error_stream;
         if (!CompareResult(result.str(), query.expected_result_, query.sort_mode_, error_stream)) {
-          std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                    << huadb::RESET << record->loc_ << "\nUnexpected error: Wrong Result\n"
-                    << error_stream.str() << std::endl;
+          std::cerr << record->loc_ << "\nUnexpected error: Wrong Result\n" << error_stream.str() << std::endl;
           return false;
         }
         break;
@@ -386,32 +407,29 @@ bool Run(const fs::path &path) {
         try {
           conn_ptr->SendQuery(sql, writer);
         } catch (huadb::DbException &e) {
-          std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                    << huadb::RESET << record->loc_ << "\nverify btree: SHOW " << verify.idx_name_
-                    << " threw: " << e.what() << std::endl;
+          std::cerr << record->loc_
+                    << "\nverify btree: SHOW " << verify.idx_name_ << " threw: " << e.what() << std::endl;
           return false;
         }
 
         auto pr = huadb::btree_test::ParsePrintOutput(result.str());
         if (!pr.ok) {
-          std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                    << huadb::RESET << record->loc_ << "\nverify btree: failed to parse SHOW output: " << pr.msg
-                    << "\nRaw output:\n"
-                    << result.str() << std::endl;
+          std::cerr << record->loc_
+                    << "\nverify btree: failed to parse SHOW output: " << pr.msg
+                    << "\nRaw output:\n" << result.str() << std::endl;
           return false;
         }
         std::string outcome = huadb::btree_test::Verify(pr.tree, verify.expected_height_);
         if (outcome != "OK") {
-          std::cerr << huadb::BOLD << huadb::RED << "ERROR\n"
-                    << huadb::RESET << record->loc_ << "\nverify btree " << verify.idx_name_
-                    << " (expected_height=" << verify.expected_height_ << "): " << outcome << "\nSHOW output:\n"
-                    << result.str() << std::endl;
+          std::cerr << record->loc_
+                    << "\nverify btree " << verify.idx_name_ << ": " << outcome
+                    << "\nSHOW output:\n" << result.str() << std::endl;
           return false;
         }
         break;
       }
       default: {
-        std::cerr << huadb::BOLD << huadb::RED << "ERROR\n" << huadb::RESET << "Unknown record type" << std::endl;
+        std::cerr << "Unknown record type" << std::endl;
         return false;
       }
     }
@@ -468,35 +486,66 @@ int main(int argc, char *argv[]) {
   bool success = true;
   std::vector<std::string> success_cases;
   std::vector<std::string> fail_cases;
+  auto initial_dir = fs::current_path();
+
   for (unsigned i = 0; i < test_count; i++) {
     success_cases.clear();
     fail_cases.clear();
-    if (fs::is_directory(TEST_DIRECTORY)) {
-      fs::remove_all(TEST_DIRECTORY);
-    }
-    fs::create_directory(TEST_DIRECTORY);
-    fs::current_path(TEST_DIRECTORY);
 
     for (const auto &path : paths) {
-      auto testcase_name = path.parent_path().filename().string() + "/" + path.filename().string();
-      std::cout << testcase_name << " " << std::flush;
-      try {
-        bool passed = Run(path);
-        success &= passed;
-        if (!passed) {
-          fail_cases.push_back(testcase_name);
-          continue;
+      auto testcase_name = path.parent_path().filename().string() + "/" + path.stem().string();
+      auto hidden_start = testcase_name.find("[hidden]");
+      if (hidden_start == std::string::npos) {
+        std::cout << testcase_name << " " << std::flush;
+      } else {
+        std::cout << testcase_name.substr(0, hidden_start) + testcase_name.substr(hidden_start + 8, 2) + "-[hidden]" << " " << std::flush;
+      }
+
+      bool verbose_disabled = IsVerboseDisabled(path);
+
+      pid_t pid = fork();
+      if (pid == 0) {
+        if (verbose_disabled) {
+          freopen("/dev/null", "w", stderr);
         }
-      } catch (std::exception &e) {
-        std::cerr << huadb::BOLD << huadb::RED << "ERROR\n" << huadb::RESET << e.what() << std::endl;
+        fs::current_path(initial_dir);
+        if (fs::is_directory(TEST_DIRECTORY)) {
+          fs::remove_all(TEST_DIRECTORY);
+        }
+        fs::create_directory(TEST_DIRECTORY);
+        fs::current_path(TEST_DIRECTORY);
+        try {
+          bool passed = Run(path);
+          _exit(passed ? 0 : 1);
+        } catch (std::exception &e) {
+          std::cerr << e.what() << std::endl;
+          _exit(1);
+        } catch (...) {
+          std::cerr << "Unknown exception" << std::endl;
+          _exit(1);
+        }
+      }
+      if (pid < 0) {
+        std::cerr << "fork failed" << std::endl;
+        return 1;
+      }
+
+      int status;
+      waitpid(pid, &status, 0);
+      bool passed = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+      if (passed) {
+        std::cout << huadb::BOLD << huadb::GREEN << "PASS" << huadb::RESET << std::endl;
+        success_cases.push_back(testcase_name);
+      } else {
+        std::cout << huadb::BOLD << huadb::RED << "ERROR" << huadb::RESET << std::endl;
         success = false;
         fail_cases.push_back(testcase_name);
-        continue;
+        if (!verbose_disabled && WIFSIGNALED(status)) {
+          std::cerr << "Test killed by signal " << WTERMSIG(status) << std::endl;
+        }
       }
-      std::cout << huadb::BOLD << huadb::GREEN << "PASS" << huadb::RESET << std::endl;
-      success_cases.push_back(testcase_name);
     }
-    fs::current_path("..");
+    fs::current_path(initial_dir);
     if (!success) {
       break;
     }

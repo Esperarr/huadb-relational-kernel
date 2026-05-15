@@ -24,13 +24,13 @@ struct CheckResult {
 struct Invariant {
   int id;            // 失败消息中显示的编号
   std::string name;  // 仅供日志/调试可读
-  std::function<CheckResult(const PrintedTree &, int /*expected_height*/)> check;
+  std::function<CheckResult(const PrintedTree&, int /*expected_height*/)> check;
 };
 
 // 当前注册的所有不变式（按 id 排序）。新增 invariant 在 verifier.cpp 中追加。
-const std::vector<Invariant> &GetInvariants();
+const std::vector<Invariant>& GetInvariants();
 
 // 跑全部不变式。成功："OK"；失败："FAIL: invariant <id>: <msg>"。
-std::string Verify(const PrintedTree &tree, int expected_height);
+std::string Verify(const PrintedTree& tree, int expected_height);
 
 }  // namespace huadb::btree_test
