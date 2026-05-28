@@ -45,8 +45,8 @@ struct HeapRow {
 
 // SHOW <idx_name> 输出解析后的内存模型
 struct PrintedTree {
-  int root_id = kNullPage;         // META 行的 root；空树时为 kNullPage
-  std::map<int, LeafPage> leaves;  // page_id → leaf
+  int root_id = kNullPage;            // META 行的 root；空树时为 kNullPage
+  std::map<int, LeafPage> leaves;     // page_id → leaf
   std::map<int, InternalPage> internals;
   std::vector<HeapRow> heap;
 
@@ -62,6 +62,6 @@ struct ParseResult {
   PrintedTree tree;
 };
 
-ParseResult ParsePrintOutput(const std::string &input);
+ParseResult ParsePrintOutput(const std::string& input);
 
 }  // namespace huadb::btree_test
