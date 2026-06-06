@@ -11,6 +11,8 @@ namespace huadb {
 void BTreePage::Init() {
   data_->page_lsn_ = NULL_LSN;
   // LAB 6 BEGIN
+  data_->lower_ = sizeof(BTreePageData);
+  page_->SetDirty();
 }
 
 bool BTreePage::IsLeafPage() const { return data_->page_type_ == BTreePageType::LEAF; }
@@ -50,9 +52,18 @@ db_size_t BTreePage::AddRecord(std::shared_ptr<IndexRecord> record, slotid_t slo
 
   // Step3. 插入记录，需要用memmove()将slots_数组整理好
   // LAB 6 BEGIN
+  data_->upper_ -= record_size;
+  record->SerializeTo(reinterpret_cast<char *>(data_) + data_->upper_);
+  if (slot_id < record_count) {
+    memmove(&data_->slots_[slot_id + 1], &data_->slots_[slot_id], (record_count - slot_id) * sizeof(Slot));
+  }
+  data_->slots_[slot_id] = {data_->upper_, static_cast<db_size_t>(record_size)};
+  data_->lower_ += sizeof(Slot);
 
   // Step4. 返回插入记录的 slot_id，别忘了page_->SetDirty();
   // LAB 6 BEGIN
+  page_->SetDirty();
+  return slot_id;
 }
 
 std::shared_ptr<IndexRecord> BTreePage::GetRecord(slotid_t slot_id, ColumnList schema) {

@@ -37,6 +37,27 @@ void BTreeIndex::Build() {
   // 为降低难度，采用内存排序即可
   auto index_records = std::vector<std::shared_ptr<IndexRecord>>();
   // LAB 6 BEGIN
+  if (table_->GetFirstPageId() != NULL_PAGE_ID) {
+    auto scan = std::make_shared<TableScan>(buffer_pool_, table_, Rid{table_->GetFirstPageId(), 0});
+    while (auto record = scan->GetNextRecord()) {
+      std::vector<Value> key_values;
+      for (auto col_idx : key_indices) {
+        key_values.push_back(record->GetValue(col_idx));
+      }
+      auto heap_rid = record->GetRid();
+      index_records.push_back(std::make_shared<IndexRecord>(key_values, heap_rid, heap_rid));
+    }
+  }
+  std::sort(index_records.begin(), index_records.end(),
+    [](const std::shared_ptr<IndexRecord> &a, const std::shared_ptr<IndexRecord> &b) {
+      const auto &av = a->GetValues();
+      const auto &bv = b->GetValues();
+      for (size_t i = 0; i < av.size(); ++i) {
+        if (av[i].Less(bv[i])) return true;
+        if (bv[i].Less(av[i])) return false;
+      }
+      return a->GetHeapRid() < b->GetHeapRid();
+    });
 
   // Step3. 遍历排序好的元组，将每个元组插入b+树的叶子节点
   // 分配索引的第一个leaf
@@ -51,12 +72,14 @@ void BTreeIndex::Build() {
   // 将排序好的索引元组逐个插入b+树，插入时要调用BuildAdd()，并传入当前页面的state，BuildAdd()会递归地将索引元组插入b+树，并在需要时分裂页面和创建上层页面
   for (auto index_record : index_records) {
     // LAB 6 BEGIN
+    BuildAdd(state, index_record);
   }
 
   // Step4. 到此为止，b+树每层最右边节点还没有设置父节点指向它的指针
   // 此外，还要根据最终b+树形态设置root_page_id_
   // 调用 FinishBuild() 来完成上述工作
   // LAB 6 BEGIN
+  FinishBuild(state);
 }
 
 void BTreeIndex::BuildAdd(std::shared_ptr<BTreePageState> state, std::shared_ptr<IndexRecord> index_record) {
@@ -67,6 +90,10 @@ void BTreeIndex::BuildAdd(std::shared_ptr<BTreePageState> state, std::shared_ptr
     if (state->parent_ == nullptr) {
       // 分配上层页面的空间，并初始化上层对应的state，设置state->parent_为上层state
       // LAB 6 BEGIN
+      auto parent_page = std::make_shared<BTreeInternalPage>(buffer_pool_.NewPage(db_oid_, oid_, npage_), npage_);
+      parent_page->Init();
+      state->parent_ = std::make_shared<BTreePageState>(db_oid_, oid_, buffer_pool_, npage_, state->level_ + 1);
+      ++npage_;
     }
 
     // Step1.2. 构造父节点索引元组：key 为当前页面 slot[0] 的扩展键 (values, heap_rid)，
@@ -88,6 +115,7 @@ void BTreeIndex::BuildAdd(std::shared_ptr<BTreePageState> state, std::shared_ptr
     parent_index_record->SetPtr({state->page_id_, 0});
     // 递归调用BuildAdd()将索引元组加入到上层页面
     // LAB 6 BEGIN
+    BuildAdd(state->parent_, parent_index_record);
 
     // Step1.3. 分配新页面，更新当前层的state
     // 中间层：新建BTreeInternalPage，叶子层（level=0）：新建BTreeLeafPage
@@ -95,13 +123,25 @@ void BTreeIndex::BuildAdd(std::shared_ptr<BTreePageState> state, std::shared_ptr
     auto old_page = state->GetPage();
     if (state->level_ == 0) {
       // LAB 6 BEGIN
+      auto new_leaf = std::make_shared<BTreeLeafPage>(buffer_pool_.NewPage(db_oid_, oid_, npage_), npage_);
+      new_leaf->Init();
+      auto old_leaf = std::make_shared<BTreeLeafPage>(buffer_pool_.GetPage(db_oid_, oid_, state->page_id_), state->page_id_);
+      old_leaf->SetNextPageId(npage_);
+      new_leaf->SetPrevPageId(state->page_id_);
+      state->page_id_ = npage_;
     } else {
       // LAB 6 BEGIN
+      auto new_internal = std::make_shared<BTreeInternalPage>(buffer_pool_.NewPage(db_oid_, oid_, npage_), npage_);
+      new_internal->Init();
+      state->page_id_ = npage_;
     }
+    ++npage_;
   }
 
   // Step2. 插入索引元组，插入后别忘了设置index_record的rid_
   // LAB 6 BEGIN
+  auto slot_id = state->GetPage()->AddRecord(index_record);
+  index_record->SetRid({state->page_id_, static_cast<slotid_t>(slot_id)});
 }
 
 void BTreeIndex::FinishBuild(std::shared_ptr<BTreePageState> state) {
@@ -113,28 +153,66 @@ void BTreeIndex::FinishBuild(std::shared_ptr<BTreePageState> state) {
 
     // Step1.1. 构造索引元组，同BuildAdd()
     // LAB 6 BEGIN
+    auto parent_index_record = page->GetRecord(0, *schema_);
+    parent_index_record->SetPtr({state->page_id_, 0});
 
     // Step1.2. 调用BuildAdd()将索引元组加入到上层页面
     // LAB 6 BEGIN
+    BuildAdd(parent_state, parent_index_record);
 
     // Step1.3. 更新当前层的state
     // LAB 6 BEGIN
+    state = parent_state;
   }
 
   // Step2. 当前state对应的页面为root，将其写入b+树的metapage字段中
   // LAB 6 BEGIN
+  SetRootPageId(state->page_id_);
 }
 
 void BTreeIndex::SetRootPageId(pageid_t root_page_id) {
   // LAB 6 BEGIN
+  auto meta_page = std::make_unique<BTreeMetaPage>(buffer_pool_.GetPage(db_oid_, oid_, 0), 0);
+  meta_page->SetRootPageId(root_page_id);
 }
 
 pageid_t BTreeIndex::GetRootPageId() const {
   // LAB 6 BEGIN
+  auto meta_page = std::make_unique<BTreeMetaPage>(buffer_pool_.GetPage(db_oid_, oid_, 0), 0);
+  return meta_page->GetRootPageId();
 }
 
 // 你可以实现一些辅助函数
 // LAB 6 BEGIN
+
+// 比较用户键向量，最多比较 min(a.size(), b.size()) 个元素
+static int CompareUserKeyPrefix(const std::vector<Value> &a, const std::vector<Value> &b) {
+  size_t n = std::min(a.size(), b.size());
+  for(size_t i = 0; i < n; ++i) {
+    if (a[i].Less(b[i])) return -1;
+    if (b[i].Less(a[i])) return 1;
+  }
+  return 0;
+}
+// 比较扩展键 (val_a, rid_a) 与 (val_b, rid_b)
+static int CompareExtKey(const std::vector<Value> &val_a, const Rid &rid_a, const std::vector<Value> &val_b, const Rid &rid_b) {
+  size_t m = val_a.size();
+  size_t n = val_b.size();
+  for (size_t i = 0; i < std::min(m, n); ++i) {
+    if (val_a[i].Less(val_b[i])) return -1;
+    if (val_b[i].Less(val_a[i])) return 1;
+  }
+  // 在最小长度范围内相等
+  if (m < n) {
+    if (rid_a < rid_b) return -1;
+    if (rid_b < rid_a) return 1;
+    return 0;
+  }
+  // m >= n
+  if (rid_a < rid_b) return -1;
+  if (rid_b < rid_a) return 1;
+  return 0;
+}
 
 Rid BTreeIndex::Search(const std::vector<Value> &val, const bool eq) const {
   // 返回**第一个**满足条件的索引项
@@ -142,6 +220,47 @@ Rid BTreeIndex::Search(const std::vector<Value> &val, const bool eq) const {
   // eq = false : 返回第一个 key >  val 的索引项
   // 若不存在则返回无效的 rid: {NULL_PAGE_ID, 0}
   // LAB 6 BEGIN
+  auto root_page_id = GetRootPageId();
+  if (root_page_id == NULL_PAGE_ID) {
+    return {NULL_PAGE_ID, 0};
+  }
+  const Rid probe_rid = eq ? MIN_RID : MAX_RID;
+  auto page_id = root_page_id;
+  // 阶段 1：从内部节点下沉到叶子
+  while (true) {
+    auto page = std::make_shared<BTreePage>(buffer_pool_.GetPage(db_oid_, oid_, page_id), page_id);
+    if (page->IsLeafPage()) break;
+    auto record_count = page->GetRecordCount();
+    slotid_t target = 0;
+    for (slotid_t i = 0; i < record_count; ++i) {
+      auto slot_record = page->GetRecord(i, *schema_);
+      int cmp = CompareExtKey(val, probe_rid, slot_record->GetValues(), slot_record->GetHeapRid());
+      if (cmp >= 0) {
+        target = i;
+      } else {
+        break;
+      }
+    }
+    auto target_record = page->GetRecord(target, *schema_);
+    page_id = target_record->GetPtr().page_id_;
+  }
+  // 阶段 2：扫描叶子页以找到第一个匹配项
+  while (page_id != NULL_PAGE_ID) {
+    auto page = std::make_shared<BTreePage>(buffer_pool_.GetPage(db_oid_, oid_, page_id), page_id);
+    auto record_count = page->GetRecordCount();
+    for (slotid_t i = 0; i < record_count; ++i) {
+      auto slot_record = page->GetRecord(i, *schema_);
+      int cmp = CompareUserKeyPrefix(val, slot_record->GetValues());
+      // eq=true：找到第一个 val <= slot 的位置（cmp <= 0）;eq=false：找到第一个 val < slot 的位置（cmp < 0）
+      if (eq ? (cmp <= 0) : (cmp < 0)) {
+        return {page_id, i};
+      }
+    }
+    // 在此叶子中未找到；尝试下一个
+    auto leaf = std::make_shared<BTreeLeafPage>(buffer_pool_.GetPage(db_oid_, oid_, page_id), page_id);
+    page_id = leaf->GetNextPageId();
+  }
+  return {NULL_PAGE_ID, 0};
 }
 
 void BTreeIndex::Draw(std::string out_path, pageid_t page_id) {

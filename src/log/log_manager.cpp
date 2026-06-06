@@ -187,7 +187,7 @@ void LogManager::Rollback(xid_t xid) {
   lsn_t lsn = att_.at(xid);
   while (lsn != NULL_LSN) {
     std::shared_ptr<LogRecord> log_record;
-    if (lsn > flushed_lsn_) {
+    if (flushed_lsn_==NULL_LSN||lsn > flushed_lsn_) {
       // 日志在 log_buffer_ 中
       std::shared_lock lock(log_buffer_mutex_);
       for (const auto &log : log_buffer_) {
@@ -201,6 +201,9 @@ void LogManager::Rollback(xid_t xid) {
       auto data = std::make_unique<char[]>(MAX_LOG_SIZE);
       disk_.ReadLog(lsn, MAX_LOG_SIZE, data.get());
       log_record = LogRecord::DeserializeFrom(lsn, data.get());
+    }
+    if(log_record==nullptr){
+      break;
     }
     lsn_t prev_lsn = log_record->GetPrevLSN();
     log_record->Undo(*buffer_pool_, *catalog_, *this, NULL_LSN);
@@ -285,6 +288,9 @@ void LogManager::Analyze() {
     auto data = std::make_unique<char[]>(MAX_LOG_SIZE);
     disk_.ReadLog(lsn, MAX_LOG_SIZE, data.get());
     auto log_record = LogRecord::DeserializeFrom(lsn, data.get());
+    if(log_record->GetSize() == 0) {
+      break;
+    }
     LogType log_type = log_record->GetType();
     xid_t xid = log_record->GetXid();
     // 跟踪日志中出现过的最大 xid
@@ -352,6 +358,9 @@ void LogManager::Redo() {
     auto data = std::make_unique<char[]>(MAX_LOG_SIZE);
     disk_.ReadLog(lsn, MAX_LOG_SIZE, data.get());
     auto log_record = LogRecord::DeserializeFrom(lsn, data.get());
+    if(log_record->GetSize() == 0) {
+      break;
+    }
     log_record->Redo(*buffer_pool_, *catalog_, *this);
     IncrementRedoCount();
     lsn += log_record->GetSize();

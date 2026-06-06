@@ -16,6 +16,11 @@ std::shared_ptr<Operator> Optimizer::Optimize(std::shared_ptr<Operator> plan) {
 
   // 只针对只读查询进行索引优化
   // LAB 6 BEGIN
+  auto root_type = plan->GetType();
+  if (root_type != OperatorType::INSERT && root_type != OperatorType::UPDATE &&
+      root_type != OperatorType::DELETE) {
+    plan = Seq2Index(plan);
+  }
   return plan;
 }
 

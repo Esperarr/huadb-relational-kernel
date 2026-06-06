@@ -231,6 +231,15 @@ void SystemCatalog::DropTable(const std::string &table_name) {
 
   // Step 2. 实际删除表上的索引
   // LAB 6 BEGIN
+  if (table2indexes_.find(table_oid) != table2indexes_.end()) {
+    std::vector<std::string> index_names;
+    for (auto &idx : table2indexes_[table_oid]) {
+      index_names.push_back(oid_manager_.GetEntryName(idx->GetOid()));
+    }
+    for (auto &name : index_names) {
+      DropIndex(name);
+    }
+  }
 
   // Step 3. 实际删除表
   // 磁盘中删除对应项
