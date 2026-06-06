@@ -32,8 +32,22 @@ static void CollectOrParts(const std::shared_ptr<OperatorExpression> &expr, std:
   }
   parts.push_back(expr);
 }
+// 把一个 OR 分支内部的 AND 递归拍平成原子谓词列表
+static void CollectAndParts(const std::shared_ptr<OperatorExpression> &expr,
+                            std::vector<std::shared_ptr<OperatorExpression>> &parts) {
+  if (expr->GetExprType() == OperatorExpressionType::LOGIC) {
+    auto logic = std::dynamic_pointer_cast<Logic>(expr);
+    if (logic->GetLogicType() == LogicType::AND) {
+      CollectAndParts(logic->children_[0], parts);
+      CollectAndParts(logic->children_[1], parts);
+      return;
+    }
+  }
+  parts.push_back(expr);
+}
 // 将谓词列表（每项之间为 AND）展开为 DNF，每个谓词本身可能是 OR 表达式
-static std::vector<std::vector<std::shared_ptr<OperatorExpression>>> ExpandToDNF( const std::vector<std::shared_ptr<OperatorExpression>> &preds) {
+static std::vector<std::vector<std::shared_ptr<OperatorExpression>>> ExpandToDNF(
+    const std::vector<std::shared_ptr<OperatorExpression>> &preds) {
   std::vector<std::vector<std::shared_ptr<OperatorExpression>>> result = {{}};
   for (const auto &pred : preds) {
     std::vector<std::shared_ptr<OperatorExpression>> or_parts;
@@ -42,7 +56,13 @@ static std::vector<std::vector<std::shared_ptr<OperatorExpression>>> ExpandToDNF
     for (const auto &term : result) {
       for (const auto &part : or_parts) {
         auto new_term = term;
-        new_term.push_back(part);
+        // 关键修复：把这个 OR 分支内部的 AND 也拍平成原子谓词，
+        // 否则 (a=1 AND b=2) 整块会被当成一个谓词，AsColumnOpConst 认不出来，无法命中索引。
+        std::vector<std::shared_ptr<OperatorExpression>> and_parts;
+        CollectAndParts(part, and_parts);
+        for (auto &ap : and_parts) {
+          new_term.push_back(ap);
+        }
         new_result.push_back(new_term);
       }
     }
