@@ -1,5 +1,7 @@
 #include "transaction/lock_manager.h"
 
+#include <algorithm>
+
 namespace huadb {
 
 bool LockManager::LockTable(xid_t xid, LockType lock_type, oid_t oid) {

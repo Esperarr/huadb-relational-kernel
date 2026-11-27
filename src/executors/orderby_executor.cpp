@@ -1,5 +1,7 @@
 #include "executors/orderby_executor.h"
 
+#include <algorithm>
+
 namespace huadb {
 
 OrderByExecutor::OrderByExecutor(ExecutorContext &context, std::shared_ptr<const OrderByOperator> plan,
