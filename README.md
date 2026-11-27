@@ -56,19 +56,22 @@ for rollback and recovery.
 
 ## Component map
 
-| Milestone branch | Component | Implementation focus |
-| --- | --- | --- |
-| [`milestone-1-storage`](../../tree/milestone-1-storage) | Storage and buffers | LRU policy, slotted-page records, insert/delete/update, page chains, and table scans |
-| [`milestone-2-recovery`](../../tree/milestone-2-recovery) | Recovery | Log append and flush, LSN chains, rollback, checkpoints, and ARIES-style analyze/redo/undo |
-| [`milestone-3-transactions`](../../tree/milestone-3-transactions) | Transactions | Snapshot visibility, isolation behavior, shared/exclusive/intention locks, compatibility, and upgrades |
-| [`milestone-4-execution`](../../tree/milestone-4-execution) | Execution | Limit, ordering, nested-loop join, and merge join |
-| [`milestone-5-optimizer`](../../tree/milestone-5-optimizer) | Optimization | Predicate normalization, predicate pushdown, and cardinality-aware greedy join reordering |
-| [`milestone-6-indexing`](../../tree/milestone-6-indexing) | Indexing | B+ tree construction, search, pagination, scans, index selection, and execution integration |
+| Milestone branch | Component | Implementation focus | Report |
+| --- | --- | --- | --- |
+| [`milestone-1-storage`](../../tree/milestone-1-storage) | Storage and buffers | LRU policy, slotted-page records, insert/delete/update, page chains, and table scans | [PDF](reports/01-storage-and-buffer-management.pdf) |
+| [`milestone-2-recovery`](../../tree/milestone-2-recovery) | Recovery | Log append and flush, LSN chains, rollback, checkpoints, and ARIES-style analyze/redo/undo | [PDF](reports/02-recovery-and-aries.pdf) |
+| [`milestone-3-transactions`](../../tree/milestone-3-transactions) | Transactions | Snapshot visibility, isolation behavior, shared/exclusive/intention locks, compatibility, and upgrades | [PDF](reports/03-transactions-and-concurrency.pdf) |
+| [`milestone-4-execution`](../../tree/milestone-4-execution) | Execution | Limit, ordering, nested-loop join, and merge join | [PDF](reports/04-query-execution.pdf) |
+| [`milestone-5-optimizer`](../../tree/milestone-5-optimizer) | Optimization | Predicate normalization, predicate pushdown, and cardinality-aware greedy join reordering | [PDF](reports/05-query-optimization.pdf) |
+| [`milestone-6-indexing`](../../tree/milestone-6-indexing) | Indexing | B+ tree construction, search, pagination, scans, index selection, and execution integration | [PDF](reports/06-bplus-tree-indexing.pdf) |
 
 The milestone branches are cumulative and point to the original implementation
 commits. The `portfolio` branch expands `milestone-6-indexing` with this
 overview, architecture documentation, build fixes, and continuous integration
 while preserving all original commits.
+
+The [implementation reports](reports/) provide the detailed design rationale,
+debugging notes, and implementation walkthrough for each component.
 
 ## Engineering highlights
 
