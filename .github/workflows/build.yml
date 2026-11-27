@@ -1,61 +1,44 @@
-name: CMake
+name: Database engine checks
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - portfolio
   pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Debug
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
 
 jobs:
-  build:
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  build-and-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Build
-      # Build your program with the given configuration
-      run: make lab1-debug
+      - name: Configure
+        run: |
+          cmake \
+            -S . \
+            -B build/debug \
+            -DCMAKE_BUILD_TYPE=Debug
 
-    - name: Test
-      working-directory: ${{github.workspace}}
-      # Execute tests defined by the CMake configuration.
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      run: make lab0
+      - name: Build
+        run: cmake --build build/debug --parallel 4
 
-  sync-gitee:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: yesolutions/mirror-action@master
-        with:
-          REMOTE: git@gitee.com:thu-db/huadb.git
-          GIT_SSH_PRIVATE_KEY: ${{ secrets.GITEE_RSA_PRIVATE_KEY }}
-          GIT_SSH_NO_VERIFY_HOST: "true"
-
-  sync-gitlab:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 2
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: yesolutions/mirror-action@master
-        with:
-          REMOTE: git@git.tsinghua.edu.cn:dbtrain/huadb-template.git
-          GIT_SSH_PRIVATE_KEY: ${{ secrets.GITEE_RSA_PRIVATE_KEY }}
-          GIT_SSH_NO_VERIFY_HOST: "true"
-          PUSH_ALL_REFS: false
+      - name: Run SQL logic tests
+        run: |
+          rm -rf huadb_test/huadb_data
+          ./build/debug/bin/sqllogictest \
+            test/lab0/*.test \
+            test/lab1/*.test \
+            test/lab2/*.test \
+            test/lab3/*.test \
+            test/lab4/*.test \
+            test/lab5/*.test \
+            test/lab6/*.test
